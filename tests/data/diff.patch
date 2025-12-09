@@ -1,0 +1,394 @@
+--- graphbuilder.cpp	2025-12-09 23:02:33 +0500
++++ ./expect_result/graphbuilder.cpp	2025-12-09 23:07:28 +0500
+@@ -189,12 +189,12 @@
+ 
+ void validate_state(const GraphBuilder::state &state)
+ {
+-	if (!state.width || !state.height)
++	if (!state.w || !state.height)
+ 		error::throw_<error::InvalidImageSize>("image dimensions must be non-zero");
+-	if (state.width > IMAGE_DIMENSION_MAX || state.height > IMAGE_DIMENSION_MAX)
++	if (state.w > IMAGE_DIMENSION_MAX || state.height > IMAGE_DIMENSION_MAX)
+ 		error::throw_<error::InvalidImageSize>("image dimensions exceed implementation limit");
+-	if (state.width > pixel_max_width(state.type))
+-		error::throw_<error::InvalidImageSize>("image width exceeds memory addressing limit");
++	if (state.w > pixel_max_w(state.type))
++		error::throw_<error::InvalidImageSize>("image w exceeds memory addressing limit");
+ 
+ 	if (state.color == GraphBuilder::ColorFamily::GREY) {
+ 		if (state.subsample_w || state.subsample_h)
+@@ -220,7 +220,7 @@
+ 	if (state.subsample_w > 2 || state.subsample_h > 2)
+ 		error::throw_<error::UnsupportedSubsampling>("subsampling greater than 4x is not supported");
+ 
+-	if (state.width % (1 << state.subsample_w) || state.height % (1 << state.subsample_h))
++	if (state.w % (1 << state.subsample_w) || state.height % (1 << state.subsample_h))
+ 		error::throw_<error::ImageNotDivisible>("image dimensions must be divisible by subsampling factor");
+ 
+ 	if (state.depth > pixel_depth(state.type))
+@@ -228,9 +228,9 @@
+ 	if (!state.fullrange && state.depth < 8)
+ 		error::throw_<error::BitDepthOverflow>("bit depth must be at least 8 for limited range");
+ 
+-	if (!std::isfinite(state.active_left) || !std::isfinite(state.active_top) || !std::isfinite(state.active_width) || !std::isfinite(state.active_height))
++	if (!std::isfinite(state.active_left) || !std::isfinite(state.active_top) || !std::isfinite(state.active_w) || !std::isfinite(state.active_height))
+ 		error::throw_<error::InvalidImageSize>("active window must be finite");
+-	if (state.active_width <= 0 || state.active_height <= 0)
++	if (state.active_w <= 0 || state.active_height <= 0)
+ 		error::throw_<error::InvalidImageSize>("active window must be positive");
+ }
+ 
+@@ -296,24 +296,24 @@
+ 
+ struct GraphBuilder::internal_state {
+ 	struct plane {
+-		unsigned width;
++		unsigned w;
+ 		unsigned height;
+ 		PixelFormat format;
+ 		double active_left;
+ 		double active_top;
+-		double active_width;
++		double active_w;
+ 		double active_height;
+ 
+-		plane() : width{}, height{}, format{}, active_left{}, active_top{}, active_width{}, active_height{} {}
++		plane() : w{}, height{}, format{}, active_left{}, active_top{}, active_w{}, active_height{} {}
+ 
+ 		friend bool operator==(const plane &lhs, const plane &rhs)
+ 		{
+-			return lhs.width == rhs.width &&
++			return lhs.w == rhs.w &&
+ 				lhs.height == rhs.height &&
+ 				lhs.format == rhs.format &&
+ 				lhs.active_left == rhs.active_left &&
+ 				lhs.active_top == rhs.active_top &&
+-				lhs.active_width == rhs.active_width &&
++				lhs.active_w == rhs.active_w &&
+ 				lhs.active_height == rhs.active_height;
+ 		}
+ 
+@@ -334,12 +334,12 @@
+ 		double subscale_h = 1.0 / (1UL << subsample_h);
+ 
+ 		planes[PLANE_U] = planes[PLANE_Y];
+-		planes[PLANE_U].width >>= subsample_w;
++		planes[PLANE_U].w >>= subsample_w;
+ 		planes[PLANE_U].height >>= subsample_h;
+ 		planes[PLANE_U].format.chroma = color == ColorFamily::YUV;
+ 		planes[PLANE_U].active_left *= subscale_w;
+ 		planes[PLANE_U].active_top *= subscale_h;
+-		planes[PLANE_U].active_width *= subscale_w;
++		planes[PLANE_U].active_w *= subscale_w;
+ 		planes[PLANE_U].active_height *= subscale_h;
+ 
+ 		planes[PLANE_V] = planes[PLANE_U];
+@@ -350,7 +350,7 @@
+ 		planes[PLANE_Y].active_top -= luma_parity_offset(parity);
+ 
+ 		if (color != ColorFamily::GREY) {
+-			double subscale_w = static_cast<double>(planes[PLANE_U].width) / planes[PLANE_Y].width;
++			double subscale_w = static_cast<double>(planes[PLANE_U].w) / planes[PLANE_Y].w;
+ 			double subscale_h = static_cast<double>(planes[PLANE_U].height) / planes[PLANE_Y].height;
+ 			double offset_w = chroma_offset_w(chroma_location_w, subscale_w);
+ 			double offset_h = chroma_offset_parity_adjustment(parity, chroma_offset_h(chroma_location_h, subscale_h));
+@@ -373,7 +373,7 @@
+ 		colorspace(state.colorspace),
+ 		alpha{ state.alpha }
+ 	{
+-		planes[PLANE_Y].width = state.width;
++		planes[PLANE_Y].w = state.w;
+ 		planes[PLANE_Y].height = state.height;
+ 		planes[PLANE_Y].format.type = state.type;
+ 		planes[PLANE_Y].format.depth = state.depth;
+@@ -382,7 +382,7 @@
+ 		planes[PLANE_Y].format.ycgco = colorspace.matrix == colorspace::MatrixCoefficients::YCGCO;
+ 		planes[PLANE_Y].active_left = state.active_left;
+ 		planes[PLANE_Y].active_top = state.active_top;
+-		planes[PLANE_Y].active_width = state.active_width;
++		planes[PLANE_Y].active_w = state.active_w;
+ 		planes[PLANE_Y].active_height = state.active_height;
+ 
+ 		if (color != ColorFamily::GREY)
+@@ -481,8 +481,8 @@
+ 			iassert(m_state.planes[PLANE_A].format.type == PixelType::FLOAT);
+ 
+ 		if (m_state.has_chroma()) {
+-			iassert(m_state.planes[0].width == m_state.planes[1].width && m_state.planes[0].height == m_state.planes[1].height);
+-			iassert(m_state.planes[0].width == m_state.planes[2].width && m_state.planes[0].height == m_state.planes[2].height);
++			iassert(m_state.planes[0].w == m_state.planes[1].w && m_state.planes[0].height == m_state.planes[1].height);
++			iassert(m_state.planes[0].w == m_state.planes[2].w && m_state.planes[0].height == m_state.planes[2].height);
+ 		}
+ 	}
+ 
+@@ -514,7 +514,7 @@
+ 		const auto phase = [](double x) { return std::modf(x, &x); };
+ 
+ 		// 1. Is the resolution different?
+-		if (source_plane.active_width != target_plane.active_width || source_plane.active_height != target_plane.active_height)
++		if (source_plane.active_w != target_plane.active_w || source_plane.active_height != target_plane.active_height)
+ 			return true;
+ 
+ 		// 2. Is the phase different?
+@@ -545,15 +545,15 @@
+ 		const internal_state::plane &dst_plane = target.planes[p];
+ 
+ 		// Input must be a subrectangle.
+-		if (src_plane.active_width == src_plane.width || src_plane.active_height == src_plane.height)
++		if (src_plane.active_w == src_plane.w || src_plane.active_height == src_plane.height)
+ 			return false;
+ 
+ 		// Output must not be a subrectangle.
+-		if (dst_plane.active_width != dst_plane.width || dst_plane.active_height != dst_plane.height)
++		if (dst_plane.active_w != dst_plane.w || dst_plane.active_height != dst_plane.height)
+ 			return false;
+ 
+ 		// Input subrectangle must be equal to output size.
+-		if (src_plane.active_width != dst_plane.width || src_plane.active_height != dst_plane.height)
++		if (src_plane.active_w != dst_plane.w || src_plane.active_height != dst_plane.height)
+ 			return false;
+ 
+ 		double src_left = src_plane.active_left - dst_plane.active_left;
+@@ -566,7 +566,7 @@
+ 		// Input subrectangle is not out of bounds.
+ 		if (src_left < 0 || src_top < 0)
+ 			return false;
+-		if (src_left + src_plane.active_width > src_plane.width || src_top + src_plane.active_height > src_plane.height)
++		if (src_left + src_plane.active_w > src_plane.w || src_top + src_plane.active_height > src_plane.height)
+ 			return false;
+ 
+ 		return true;
+@@ -645,7 +645,7 @@
+ 		}
+ 
+ 		auto filter = std::make_unique<ValueInitializeFilter>(
+-			target.planes[PLANE_U].width, target.planes[PLANE_U].height, format.type, val);
++			target.planes[PLANE_U].w, target.planes[PLANE_U].height, format.type, val);
+ 		graphengine::node_id id = m_graph.add_transform(m_graph.save_filter(std::move(filter)), nullptr);
+ 		m_ids[PLANE_U] = { id, 0 };
+ 		m_ids[PLANE_V] = { id, 0 };
+@@ -666,7 +666,7 @@
+ 		observer.premultiply();
+ 
+ 		auto filter = std::make_unique<PremultiplyFilter>(
+-			m_state.planes[PLANE_Y].width, m_state.planes[PLANE_Y].height);
++			m_state.planes[PLANE_Y].w, m_state.planes[PLANE_Y].height);
+ 		for (unsigned p = 0; p < (m_state.has_chroma() ? 3U : 1U); ++p) {
+ 			graphengine::node_dep_desc deps[2] = { m_ids[p], m_ids[PLANE_A] };
+ 			m_ids[p] = { m_graph.add_transform(filter.get(), deps), 0 };
+@@ -684,7 +684,7 @@
+ 		observer.unpremultiply();
+ 
+ 		auto filter = std::make_unique<UnpremultiplyFilter>(
+-			m_state.planes[PLANE_Y].width, m_state.planes[PLANE_Y].height);
++			m_state.planes[PLANE_Y].w, m_state.planes[PLANE_Y].height);
+ 		for (unsigned p = 0; p < (m_state.has_chroma() ? 3U : 1U); ++p) {
+ 			graphengine::node_dep_desc deps[2] = {m_ids[p], m_ids[PLANE_A]};
+ 			m_ids[p] = { m_graph.add_transform(filter.get(), deps), 0 };
+@@ -711,7 +711,7 @@
+ 		}
+ 
+ 		auto filter = std::make_unique<ValueInitializeFilter>(
+-			m_state.planes[PLANE_Y].width, m_state.planes[PLANE_Y].height, format.type, val);
++			m_state.planes[PLANE_Y].w, m_state.planes[PLANE_Y].height, format.type, val);
+ 		m_ids[PLANE_A] = { m_graph.add_transform(m_graph.save_filter(std::move(filter)), nullptr), 0 };
+ 
+ 		m_state.alpha = type;
+@@ -726,8 +726,8 @@
+ 		bool supported[4] = { false, true, cpu_has_fast_f16(params.cpu), true };
+ 		auto is_supported_type = [=](PixelType type) { return supported[static_cast<int>(type)]; };
+ 
+-		double src_pels = static_cast<double>(m_state.planes[p].width) * m_state.planes[p].height;
+-		double dst_pels = static_cast<double>(target.planes[p].width) * target.planes[p].height;
++		double src_pels = static_cast<double>(m_state.planes[p].w) * m_state.planes[p].height;
++		double dst_pels = static_cast<double>(target.planes[p].w) * target.planes[p].height;
+ 
+ 		PixelFormat src_format = m_state.planes[p].format;
+ 		PixelFormat dst_format = target.planes[p].format;
+@@ -759,28 +759,28 @@
+ 		const internal_state::plane &dst_plane = target.planes[p];
+ 
+ 		if (params.unresize) {
+-			if (src_plane.width != src_plane.active_width || src_plane.height != src_plane.active_height ||
+-			    dst_plane.width != dst_plane.active_width || dst_plane.height != dst_plane.active_height)
++			if (src_plane.w != src_plane.active_w || src_plane.height != src_plane.active_height ||
++			    dst_plane.w != dst_plane.active_w || dst_plane.height != dst_plane.active_height)
+ 			{
+ 				error::throw_<error::ResamplingNotAvailable>("unresize not supported for for given subregion");
+ 			}
+ 		}
+ 
+-		double scale_w = static_cast<double>(dst_plane.active_width) / src_plane.active_width;
++		double scale_w = static_cast<double>(dst_plane.active_w) / src_plane.active_w;
+ 		double scale_h = static_cast<double>(dst_plane.active_height) / src_plane.active_height;
+ 
+ 		// Map active region in output image to the corresponding rectangle in input image.
+ 		double shift_w = src_plane.active_left - dst_plane.active_left / scale_w;
+ 		double shift_h = src_plane.active_top - dst_plane.active_top / scale_h;
+-		double subwidth = src_plane.active_width * (dst_plane.width / dst_plane.active_width);
++		double subw = src_plane.active_w * (dst_plane.w / dst_plane.active_w);
+ 		double subheight = src_plane.active_height * (dst_plane.height / dst_plane.active_height);
+ 
+ 		std::unique_ptr<graphengine::Filter> first;
+ 		std::unique_ptr<graphengine::Filter> second;
+ 
+ 		if (params.unresize) {
+-			unresize::UnresizeConversion conv{ src_plane.width, src_plane.height, src_plane.format.type };
+-			conv.set_orig_width(dst_plane.width)
++			unresize::UnresizeConversion conv{ src_plane.w, src_plane.height, src_plane.format.type };
++			conv.set_orig_w(dst_plane.w)
+ 				.set_orig_height(dst_plane.height)
+ 				.set_shift_w(shift_w)
+ 				.set_shift_h(shift_h)
+@@ -792,14 +792,14 @@
+ 			first = std::move(filter_list.first);
+ 			second = std::move(filter_list.second);
+ 		} else{
+-			resize::ResizeConversion conv{ src_plane.width, src_plane.height, src_plane.format.type };
++			resize::ResizeConversion conv{ src_plane.w, src_plane.height, src_plane.format.type };
+ 			conv.set_depth(src_plane.format.depth)
+ 				.set_filter(p == PLANE_U || p == PLANE_V ? params.filter_uv : params.filter)
+-				.set_dst_width(dst_plane.width)
++				.set_dst_w(dst_plane.w)
+ 				.set_dst_height(dst_plane.height)
+ 				.set_shift_w(shift_w)
+ 				.set_shift_h(shift_h)
+-				.set_subwidth(subwidth)
++				.set_subw(subw)
+ 				.set_subheight(subheight)
+ 				.set_cpu(params.cpu);
+ 
+@@ -831,7 +831,7 @@
+ 		if (m_state.colorspace == csp)
+ 			return;
+ 
+-		colorspace::ColorspaceConversion conv{ m_state.planes[0].width, m_state.planes[0].height };
++		colorspace::ColorspaceConversion conv{ m_state.planes[0].w, m_state.planes[0].height };
+ 		conv.set_csp_in(m_state.colorspace)
+ 			.set_csp_out(csp)
+ 			.set_approximate_gamma(params.approximate_gamma)
+@@ -867,7 +867,7 @@
+ 		if (m_state.planes[p].format == format)
+ 			return;
+ 
+-		depth::DepthConversion conv{ m_state.planes[p].width, m_state.planes[p].height };
++		depth::DepthConversion conv{ m_state.planes[p].w, m_state.planes[p].height };
+ 		conv.set_pixel_in(m_state.planes[p].format)
+ 			.set_pixel_out(format)
+ 			.set_dither_type(params.dither_type)
+@@ -926,9 +926,9 @@
+ 			unsigned left = static_cast<unsigned>(m_state.planes[p].active_left - tmp.planes[p].active_left);
+ 			unsigned top = static_cast<unsigned>(m_state.planes[p].active_top - tmp.planes[p].active_top);
+ 
+-			observer.subrectangle(left, top, tmp.planes[p].width, tmp.planes[p].height, p);
++			observer.subrectangle(left, top, tmp.planes[p].w, tmp.planes[p].height, p);
+ 
+-			auto filter = std::make_unique<CopyRectFilter>(left, top, tmp.planes[p].width, tmp.planes[p].height, format.type);
++			auto filter = std::make_unique<CopyRectFilter>(left, top, tmp.planes[p].w, tmp.planes[p].height, format.type);
+ 			attach_greyscale_filter(m_graph.save_filter(std::move(filter)), mask);
+ 
+ 			apply_mask(mask, [&](int q)
+@@ -969,14 +969,14 @@
+ 		if (needs_colorspace(target)) {
+ 			internal_state tmp = make_float_444_state(m_state, false);
+ 
+-			const internal_state &w = m_state.planes[PLANE_Y].width < target.planes[PLANE_Y].width ? m_state : target;
++			const internal_state &w = m_state.planes[PLANE_Y].w < target.planes[PLANE_Y].w ? m_state : target;
+ 			const internal_state &h = m_state.planes[PLANE_Y].height < target.planes[PLANE_Y].height ? m_state : target;
+ 
+-			tmp.planes[PLANE_Y].width = w.planes[PLANE_Y].width;
++			tmp.planes[PLANE_Y].w = w.planes[PLANE_Y].w;
+ 			tmp.planes[PLANE_Y].height = h.planes[PLANE_Y].height;
+ 			tmp.planes[PLANE_Y].active_left = w.planes[PLANE_Y].active_left;
+ 			tmp.planes[PLANE_Y].active_top = h.planes[PLANE_Y].active_top;
+-			tmp.planes[PLANE_Y].active_width = w.planes[PLANE_Y].active_width;
++			tmp.planes[PLANE_Y].active_w = w.planes[PLANE_Y].active_w;
+ 			tmp.planes[PLANE_Y].active_height = h.planes[PLANE_Y].active_height;
+ 
+ 			if (tmp.has_chroma())
+@@ -1082,7 +1082,7 @@
+ 
+ 	void set_source(const state &source)
+ 	{
+-		if (m_state.planes[0].width)
++		if (m_state.planes[0].w)
+ 			error::throw_<error::InternalError>("graph already initialized");
+ 
+ 		m_source_state = source;
+@@ -1100,7 +1100,7 @@
+ 
+ 	void connect(const state &target, const params &params, FilterObserver &observer)
+ 	{
+-		if (!m_state.planes[0].width)
++		if (!m_state.planes[0].w)
+ 			error::throw_<error::InternalError>("graph not initialized");
+ 
+ 		internal_state internal_target{ target };
+@@ -1114,7 +1114,7 @@
+ 
+ 	std::unique_ptr<SubGraph> build_subgraph()
+ 	{
+-		if (!m_state.planes[0].width)
++		if (!m_state.planes[0].w)
+ 			error::throw_<error::InternalError>("graph not initialized");
+ 
+ 		// Count input planes.
+@@ -1126,16 +1126,16 @@
+ 			auto source_desc_it = source_desc.begin();
+ 			auto source_ids_it = source_ids.begin();
+ 
+-			*source_desc_it++ = { m_source_state.width, m_source_state.height, zimg::pixel_size(m_source_state.type) };
++			*source_desc_it++ = { m_source_state.w, m_source_state.height, zimg::pixel_size(m_source_state.type) };
+ 			*source_ids_it++ = m_graph.source_id(PLANE_Y);
+ 			if (m_source_state.color != ColorFamily::GREY) {
+-				*source_desc_it++ = { m_source_state.width >> m_source_state.subsample_w, m_source_state.height >> m_source_state.subsample_h, zimg::pixel_size(m_source_state.type) };
+-				*source_desc_it++ = { m_source_state.width >> m_source_state.subsample_w, m_source_state.height >> m_source_state.subsample_h, zimg::pixel_size(m_source_state.type) };
++				*source_desc_it++ = { m_source_state.w >> m_source_state.subsample_w, m_source_state.height >> m_source_state.subsample_h, zimg::pixel_size(m_source_state.type) };
++				*source_desc_it++ = { m_source_state.w >> m_source_state.subsample_w, m_source_state.height >> m_source_state.subsample_h, zimg::pixel_size(m_source_state.type) };
+ 				*source_ids_it++ = m_graph.source_id(PLANE_U);
+ 				*source_ids_it++ = m_graph.source_id(PLANE_V);
+ 			}
+ 			if (m_source_state.alpha != AlphaType::NONE) {
+-				*source_desc_it++ = { m_source_state.width, m_source_state.height, zimg::pixel_size(m_source_state.type) };
++				*source_desc_it++ = { m_source_state.w, m_source_state.height, zimg::pixel_size(m_source_state.type) };
+ 				*source_ids_it++ = m_graph.source_id(PLANE_A);
+ 			}
+ 		}
+@@ -1223,7 +1223,7 @@
+ 	DefaultFilterObserver default_factory;
+ 
+ 	validate_state(target);
+-	if (target.active_left != 0 || target.active_top != 0 || target.active_width != target.width || target.active_height != target.height)
++	if (target.active_left != 0 || target.active_top != 0 || target.active_w != target.w || target.active_height != target.height)
+ 		error::throw_<error::ResamplingNotAvailable>("active subregion not supported on target image");
+ 
+ 	if (!params)
+--- graphbuilder.h	2025-12-09 23:03:28 +0500
++++ ./expect_result/graphbuilder.h	2025-12-09 23:07:46 +0500
+@@ -46,7 +46,7 @@
+ public:
+ 	virtual ~FilterObserver() = default;
+ 
+-	virtual void subrectangle(unsigned left, unsigned top, unsigned width, unsigned height, int plane) {}
++	virtual void subrectangle(unsigned left, unsigned top, unsigned w, unsigned height, int plane) {}
+ 
+ 	virtual void yuv_to_grey() {}
+ 	virtual void grey_to_yuv() {}
+@@ -106,7 +106,7 @@
+ 
+ 	// Canonical state.
+ 	struct state {
+-		unsigned width;
++		unsigned w;
+ 		unsigned height;
+ 		PixelType type;
+ 		unsigned subsample_w;
+@@ -124,7 +124,7 @@
+ 
+ 		double active_left;
+ 		double active_top;
+-		double active_width;
++		double active_w;
+ 		double active_height;
+ 
+ 		AlphaType alpha;
