@@ -160,7 +160,7 @@ int apply_patch(const char* patch_file, const patch_options_t* options) {
             /* parse new filename */
             const char* after = parse_header_filename(line_copy + 4, new_file, sizeof(new_file));
             if (options->verbose)
-                printf("Found new: '%s'\n", orig_file);
+                printf("Found new: '%s'\n", new_file);
             /* the rest of the line may be a timestamp. */
 
             /* At this point we have both orig_file and new_file (or at least new_file). Open input and output */
@@ -179,9 +179,9 @@ int apply_patch(const char* patch_file, const patch_options_t* options) {
             const char* write_path = write_inplace ? orig_file : new_file;
 
             /* Open the target file in binary mode to preserve bytes */
-            input = fopen(new_file, "rb");
+            input = fopen(read_path, "rb");
             if (!input) {
-                fprintf(stderr, "Cannot open target file: %s\n", new_file);
+                fprintf(stderr, "Cannot open target file: %s\n", read_path);
                 fclose(patch);
                 return 1;
             }
