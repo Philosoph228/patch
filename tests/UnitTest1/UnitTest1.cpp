@@ -103,10 +103,9 @@ static bool RunPatcherAndWait(const std::string& patchPath, DWORD timeoutMs = 10
 TEST_CLASS(PatcherTests) {
 public:
     TEST_METHOD(Test_SingleHunk) {
-        std::string tmp = GetTempDir();
-        std::string orig = tmp + "./tests/data/sample.cpp";
-        std::string patch = tmp + "./tests/data/single_hunk.patch";
-        std::string expected = tmp + "./tests/data/expected/sample.cpp";
+        std::string orig = "./tests/data/sample.cpp";
+        std::string patch = "./tests/data/single_hunk.patch";
+        std::string expected = "./tests/data/expected/sample.cpp";
 
         // Original file
         WriteFileUtf8(orig,
