@@ -24,6 +24,30 @@ void trim_newline(char* line) {
     }
 }
 
+/* finalize currently open output: close files, move tmp to destination.
+ * return 0 on success
+ */
+int finalize_file(FILE** inptr, FILE** outptr, char* cur_output, char* temp_path, const patch_options_t* options) {
+    if (*inptr) {
+        fclose(*inptr);
+        *inptr = NULL;
+    }
+    if (*outptr) {
+        fclose(*outptr);
+        *outptr = NULL;
+        /* replace original output (if exists) */
+        /* Delete destination (ignore errors) */
+        DeleteFileA(cur_output);
+        if (!MoveFileA(temp_path, cur_output)) {
+            fprintf(stderr, "Failed to move temp '%s' -> '%s' (err %lu)\n", temp_path, cur_output, GetLastError());
+            /* Try to remove temp */
+            DeleteFileA(temp_path);
+            return 1;
+        }
+    }
+    return 0;
+}
+
 int apply_patch(const char* patch_file, const patch_options_t* options) {
     /* Open patch file in binary mode to avoid text-mode newline translations */
     FILE* patch = fopen(patch_file, "rb");
@@ -31,6 +55,8 @@ int apply_patch(const char* patch_file, const patch_options_t* options) {
         fprintf(stderr, "Cannot open patch file: %s\n", patch_file);
         return 1;
     }
+    if (options->verbose)
+        printf("Opened patch '%s'\n", patch_file);
 
     char line[MAX_LINE];
     char pushback[MAX_LINE];
@@ -57,13 +83,56 @@ int apply_patch(const char* patch_file, const patch_options_t* options) {
         }
 
         /* Note: lines read from patch may contain CRLF; trim_newline when parsing filenames later */
-        if (strncmp(line, "--- ", 4) == 0) {
-            sscanf(line + 4, "%s", orig_file);
-            trim_newline(orig_file);
-        } else if (strncmp(line, "+++ ", 4) == 0) {
-            sscanf(line + 4, "%s", new_file);
-            trim_newline(new_file);
+        /* Trim newline for header parsing convenience */
+        char line_copy[MAX_LINE];
+        strncpy(line_copy, line, MAX_LINE);
+        trim_newline(line_copy);
 
+        /* Note: lines read from patch may contain CRLF; trim_newline when parsing filenames later */
+        if (strncmp(line_copy, "--- ", 4) == 0) {
+            /* When starting a new diff, if we have currently open input/output finalize it first. */
+
+            if (input || output) {
+                if (options->verbose)
+                    printf("Finalizing the previous file: %s, new_file");
+                if (finalize_file(&input, &output, new_file, temp_path, options) != 0) {
+                    fclose(patch);
+                    return 1;
+                }
+                /* reset filenames/timestamp */
+                *orig_file = *new_file = '\0';
+            }
+            /* parse original filename (token after '--- ') */
+            char* p = line_copy + 4;
+            while (*p == ' ')
+                p++;
+            /* TODO: it is bad for `"New Folder"` and `New\ Folder` */
+            /* first whitespace separates filename from possible timestamp; we treat filename as token without spaces */
+            char filename[MAX_PATH_LEN];
+            int i = 0;
+            while (*p && *p != '\t' && *p != ' ' && i < (int)sizeof(filename) - 1)
+                filename[i++] = *p++;
+            filename[i] = '\0';
+            strncpy(orig_file, filename, MAX_PATH_LEN);
+            orig_file[MAX_PATH_LEN - 1] = '\0';
+            if (options->verbose)
+                printf("Found orig: '%s'\n", orig_file);
+        } else if (strncmp(line_copy, "+++ ", 4) == 0) {
+            /* parse new filename */
+            char* p = line_copy + 4;
+            while (*p == ' ')
+                p++;
+            char filename[MAX_PATH_LEN];
+            int i = 0;
+            while (*p && *p != '\t' && *p != ' ' && i < (int)sizeof(filename) - 1)
+                filename[i++] = *p++;
+            filename[i] = '\0';
+            strncpy(new_file, filename, MAX_PATH_LEN);
+            new_file[MAX_PATH_LEN - 1] = '\0';
+
+            /* the rest of the line may be a timestamp. */
+
+            /* At this point we have both orig_file and new_file (or at least new_file). Open input and output */
             if (input) {
                 fclose(input);
                 input = NULL;
@@ -73,6 +142,11 @@ int apply_patch(const char* patch_file, const patch_options_t* options) {
                 output = NULL;
             }
 
+            /* Determine where to read and where to write based on  */
+            int write_inplace = strcmp(orig_file, new_file) == 0;
+            const char* read_path = orig_file[0] ? orig_file : new_file;    /* fallback */
+            const char* write_path = write_inplace ? orig_file : new_file;
+
             /* Open the target file in binary mode to preserve bytes */
             input = fopen(new_file, "rb");
             if (!input) {
@@ -81,18 +155,21 @@ int apply_patch(const char* patch_file, const patch_options_t* options) {
                 return 1;
             }
 
-            /* reset current input line tracking for this file */
-            cur_input_line = 1;
-
-            snprintf(temp_path, MAX_PATH_LEN, "%s.tmp", new_file);
+            /* create temp path based on write_path */
+            snprintf(temp_path, sizeof(temp_path), "%s.tmp", write_path);
+            temp_path[sizeof(temp_path) - 1] = '\0';
             output = fopen(temp_path, "wb");
             if (!output) {
-                fprintf(stderr, "Cannot create temp file.\n");
+                fprintf(stderr, "Cannot create temp file: %s\n", temp_path);
                 fclose(input);
                 fclose(patch);
                 return 1;
             }
+
+            /* reset current input line tracking for this file */
+            cur_input_line = 1;
         } else if (strncmp(line, "@@ ", 3) == 0) {
+            /* hunk header line */
             int start_old = 0, len_old = 0, start_new = 0, len_new = 0;
             int parsed = sscanf(line, "@@ -%d,%d +%d,%d @@", &start_old, &len_old, &start_new, &len_new);
             if (parsed < 4) {
@@ -163,22 +240,14 @@ int apply_patch(const char* patch_file, const patch_options_t* options) {
         /* other lines in patch are ignored (e.g., index lines, timestamps) */
     }
 
-    /* Copy remaining lines from input to output */
-    if (input && output) {
-        char rest_line[MAX_LINE];
-        while (fgets(rest_line, MAX_LINE, input)) {
-            fputs(rest_line, output);
+    /* after loop, finalize any remaining open file */
+    if (input || output) {
+        if (options->verbose)
+            printf("Finalizing last file: %s\n", new_file);
+        if (finalize_file(&input, &output, new_file, temp_path, options) != 0) {
+            fclose(patch);
+            return 1;
         }
-    }
-
-    if (input)
-        fclose(input);
-    if (output)
-        fclose(output);
-    if (new_file[0]) {
-        /* Replace original file with temp */
-        DeleteFileA(new_file);
-        MoveFileA(temp_path, new_file);
     }
 
     fclose(patch);
