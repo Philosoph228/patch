@@ -48,6 +48,56 @@ int finalize_file(FILE** inptr, FILE** outptr, char* cur_output, char* temp_path
     return 0;
 }
 
+/* parse_header_filename:
+ *  p: pointer to the text after '--- ' or '+++ '
+ *  out_fname: buffer to receive filename (may be NULL)
+ *  out_len: length of out_fname (may be 0)
+ *
+ * Returns: pointer within p just after the parsed filename (i.e. at the separator or NUL)
+ */
+static const char* parse_header_filename(const char* p, char* out_fname, size_t out_len) {
+    /* skip spaces */
+    while (*p == ' ' || *p == '\t')
+        ++p;
+
+    char buf[MAX_PATH_LEN];
+    size_t bi = 0;
+    int in_quote = 0;
+
+    while (*p && *p != '\r' && *p != '\n' && bi + 1 < sizeof(buf)) {
+        if (*p == '"') {
+            in_quote = !in_quote;
+            ++p;
+            continue;
+        }
+
+        if (!in_quote && (*p == ' ' || *p == '\t'))
+            break;
+
+        if (*p == '\\' && *(p + 1)) {
+            buf[bi++] = *(p + 1);
+            p += 2;
+            continue;
+        }
+
+        buf[bi++] = *p++;
+    }
+
+    buf[bi] = '\0';
+
+    if (out_fname && out_len > 0) {
+        if (out_len == 1) {
+            out_fname[0] = '\0';
+        } else {
+            strncpy(out_fname, buf, out_len - 1);
+            out_fname[out_len - 1] = '\0';
+        }
+    }
+
+    /* p now points at separator (space/tab/newline) or end -- return that */ 
+    return p;
+}
+
 int apply_patch(const char* patch_file, const patch_options_t* options) {
     /* Open patch file in binary mode to avoid text-mode newline translations */
     FILE* patch = fopen(patch_file, "rb");
@@ -103,33 +153,14 @@ int apply_patch(const char* patch_file, const patch_options_t* options) {
                 *orig_file = *new_file = '\0';
             }
             /* parse original filename (token after '--- ') */
-            char* p = line_copy + 4;
-            while (*p == ' ')
-                p++;
-            /* TODO: it is bad for `"New Folder"` and `New\ Folder` */
-            /* first whitespace separates filename from possible timestamp; we treat filename as token without spaces */
-            char filename[MAX_PATH_LEN];
-            int i = 0;
-            while (*p && *p != '\t' && *p != ' ' && i < (int)sizeof(filename) - 1)
-                filename[i++] = *p++;
-            filename[i] = '\0';
-            strncpy(orig_file, filename, MAX_PATH_LEN);
-            orig_file[MAX_PATH_LEN - 1] = '\0';
+            const char* after = parse_header_filename(line_copy + 4, orig_file, sizeof(orig_file));
             if (options->verbose)
                 printf("Found orig: '%s'\n", orig_file);
         } else if (strncmp(line_copy, "+++ ", 4) == 0) {
             /* parse new filename */
-            char* p = line_copy + 4;
-            while (*p == ' ')
-                p++;
-            char filename[MAX_PATH_LEN];
-            int i = 0;
-            while (*p && *p != '\t' && *p != ' ' && i < (int)sizeof(filename) - 1)
-                filename[i++] = *p++;
-            filename[i] = '\0';
-            strncpy(new_file, filename, MAX_PATH_LEN);
-            new_file[MAX_PATH_LEN - 1] = '\0';
-
+            const char* after = parse_header_filename(line_copy + 4, new_file, sizeof(new_file));
+            if (options->verbose)
+                printf("Found new: '%s'\n", orig_file);
             /* the rest of the line may be a timestamp. */
 
             /* At this point we have both orig_file and new_file (or at least new_file). Open input and output */
