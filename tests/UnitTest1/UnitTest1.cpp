@@ -1,6 +1,8 @@
 #include "pch.h"
 #include "CppUnitTest.h"
 
+#include "../../src/patch.c"
+
 using namespace Microsoft::VisualStudio::CppUnitTestFramework;
 
 namespace UnitTest1 {
@@ -102,9 +104,9 @@ TEST_CLASS(PatcherTests) {
 public:
     TEST_METHOD(Test_SingleHunk) {
         std::string tmp = GetTempDir();
-        std::string orig = tmp + "\\test1.txt";
-        std::string patch = tmp + "\\test1.patch";
-        std::string expected = tmp + "\\test1.expected.txt";
+        std::string orig = tmp + "./tests/data/sample.cpp";
+        std::string patch = tmp + "./tests/data/single_hunk.patch";
+        std::string expected = tmp + "./tests/data/expected/sample.cpp";
 
         // Original file
         WriteFileUtf8(orig,
@@ -148,9 +150,9 @@ public:
 
     TEST_METHOD(Test_MultipleHunks_SameFile) {
         std::string tmp = GetTempDir();
-        std::string orig = tmp + "\\multi.txt";
-        std::string patch = tmp + "\\multi.patch";
-        std::string expected = tmp + "\\multi.expected.txt";
+        std::string orig = tmp + ".\\tests\\data\\graphbuilder.cpp";
+        std::string patch = tmp + ".\\tests\\data\\diff.patch";
+        std::string expected = ".\\tests\\data\\expected\\graphbuilder.cpp";
 
         // Original: 6 lines
         WriteFileUtf8(orig,

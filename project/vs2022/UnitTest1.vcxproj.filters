@@ -13,6 +13,15 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="tests">
+      <UniqueIdentifier>{f306b4e4-7f19-4152-8bc8-0432be1571ef}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="tests\data">
+      <UniqueIdentifier>{80936c23-326b-4804-8a95-5624deabfed0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="tests\data\expected">
+      <UniqueIdentifier>{45569517-047a-4dd4-b66a-f2913c7a0905}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\tests\UnitTest1\pch.cpp">
@@ -26,5 +35,31 @@
     <ClInclude Include="..\..\tests\UnitTest1\pch.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <CopyFileToFolders Include="..\..\tests\data\expected\graphbuilder.h">
+      <Filter>tests\data\expected</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\..\tests\data\expected\graphbuilder.cpp">
+      <Filter>tests\data\expected</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\..\tests\data\graphbuilder.cpp">
+      <Filter>tests\data</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\..\tests\data\diff.patch">
+      <Filter>tests\data</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\..\tests\data\graphbuilder.h">
+      <Filter>tests\data</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\..\tests\data\expected\sample.cpp">
+      <Filter>tests\data\expected</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\..\tests\data\sample.cpp">
+      <Filter>tests\data</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\..\tests\data\single_hunk.patch">
+      <Filter>tests\data</Filter>
+    </CopyFileToFolders>
   </ItemGroup>
 </Project>

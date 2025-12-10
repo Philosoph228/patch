@@ -1,0 +1,43 @@
+--- sample.cpp	2025-12-10 14:55:57 +0500
++++ ./expect_result/sample.cpp	2025-12-10 14:58:19 +0500
+@@ -26,23 +26,29 @@
+ }
+ 
+ int main() {
+-    // Basic variables
+-    int value = 42;
+-    double pi = 3.14159;
++    // New: user input
++    std::string userName;
++    int userAge;
+ 
+-    std::cout << "Value: " << value << ", Pi: " << pi << "\n";
++    std::cout << "Enter your name: ";
++    std::getline(std::cin, userName);
+ 
+-    // Working with a vector
+-    std::vector<int> numbers = {1, 2, 3, 4, 5};
+-    printNumbers(numbers);
++    std::cout << "Enter your age: ";
++    std::cin >> userAge;
++
++    Person user(userName, userAge);
++    user.sayHello();
+ 
+-    // Create and use a class
++    // Existing sample data
+     Person alice("Alice", 30);
+     alice.sayHello();
+ 
+-    // Loop example
+-    std::cout << "Counting: ";
+-    for (int i = 0; i < 5; i++) {
++    std::vector<int> numbers = {10, 20, 30};
++    printNumbers(numbers);
++
++    // Modified loop (counting backward)
++    std::cout << "Countdown: ";
++    for (int i = 5; i >= 1; i--) {
+         std::cout << i << " ";
+     }
+     std::cout << "\n";
