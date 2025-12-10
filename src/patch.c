@@ -255,12 +255,29 @@ int apply_patch(const char* patch_file, const patch_options_t* options) {
 }
 
 int main(int argc, char** argv) {
+    /* Simple argument parser (no fancy lib). */
     if (argc < 2) {
-        fprintf(stderr, "Usage: %s <patchfile>\n", argv[0]);
+        fprintf(stderr, "Usage: %s [--verbose] <patchfile>\n", argv[0]);
         return 1;
     }
 
     patch_options_t options = { 0 };
+    const char* patchfile = NULL;
+    for (int i = 1; i < argc; ++i) {
+        if (strcmp(argv[i], "--verbose") == 0)
+            options.verbose = 1;
+        else if (*argv[i] == '-') {
+            fprintf(stderr, "Unknown option: %s\n", argv[i]);
+            return 1;
+        }
+        else {
+            patchfile = argv[i];
+        }
+    }
+    if (!patchfile) {
+        fprintf(stderr, "Patch file not specified\n");
+        return 1;
+    }
 
-    return apply_patch(argv[1], &options);
+    return apply_patch(patchfile, &options);
 }
