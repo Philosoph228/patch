@@ -107,39 +107,8 @@ public:
         std::string patch = "./tests/data/single_hunk.patch";
         std::string expected = "./tests/data/expected/sample.cpp";
 
-        // Original file
-        WriteFileUtf8(orig,
-                      "Line 1\n"
-                      "Line 2\n"
-                      "Line 3\n"
-                      "Line 4\n"
-        );
-
-        // Expected after patch
-        WriteFileUtf8(expected,
-                      "Line 1\n"
-                      "Inserted A\n"
-                      "Inserted B\n"
-                      "Line 3\n"
-                      "Line 4\n"
-        );
-
-        // Patch: replace lines 2..3 (start_old=2,len_old=2) with 2 inserted + keep Line3
-        // Note: +++ header must point to the path of the file to be patched
-        std::ostringstream p;
-        p << "--- " << orig << "\n";
-        p << "+++ " << orig << "\n";
-        p << "@@ -2,2 +2,3 @@\n";
-        p << "-Line 2\n";
-        p << "-Line 3\n";
-        p << "+Inserted A\n";
-        p << "+Inserted B\n";
-        p << "+Line 3\n";
-
-        WriteFileUtf8(patch, p.str());
-
         // Run patcher
-        Assert::IsTrue(RunPatcherAndWait(patch), L"patcher failed");
+        Assert::IsTrue(apply_patch(patch.c_str()), L"patcher failed");
 
         // Compare
         std::string actual = ReadFile(orig);
