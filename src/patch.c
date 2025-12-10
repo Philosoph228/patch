@@ -11,6 +11,12 @@
 #define MAX_LINE 4096
 #define MAX_PATH_LEN 260
 
+typedef struct patch_options {
+    unsigned int inplace : 1;
+    unsigned int apply_dates : 1;
+    unsigned int verbose : 1;
+} patch_options_t;
+
 void trim_newline(char* line) {
     size_t len = strlen(line);
     while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r')) {
@@ -18,7 +24,7 @@ void trim_newline(char* line) {
     }
 }
 
-int apply_patch(const char* patch_file) {
+int apply_patch(const char* patch_file, const patch_options_t* options) {
     /* Open patch file in binary mode to avoid text-mode newline translations */
     FILE* patch = fopen(patch_file, "rb");
     if (!patch) {
@@ -185,5 +191,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    return apply_patch(argv[1]);
+    patch_options_t options = { 0 };
+
+    return apply_patch(argv[1], &options);
 }
