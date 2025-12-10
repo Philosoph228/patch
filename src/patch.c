@@ -8,6 +8,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef _WIN32
+#include <io.h>
+#endif
+
 #define MAX_LINE 4096
 #define MAX_PATH_LEN 260
 
@@ -24,27 +28,61 @@ void trim_newline(char* line) {
     }
 }
 
-/* finalize currently open output: close files, move tmp to destination.
- * return 0 on success
+/* finalize currently open output: copy remainder (line-by-line) if both files open,
+ * close handles, move temp into place. Return 0 on success, non-zero on error.
  */
 int finalize_file(FILE** inptr, FILE** outptr, char* cur_output, char* temp_path, const patch_options_t* options) {
-    if (*inptr) {
+    /* If both input and output are open, copy remaining lines from input into output. */
+    if (inptr && *inptr && outptr && *outptr) {
+        char buf[MAX_LINE];
+        while (fgets(buf, sizeof(buf), *inptr)) {
+            if (fputs(buf, *outptr) == EOF) {
+                perror("Write error while copying remainder");
+                /* cleanup and remove temp */
+                fclose(*outptr);
+                *outptr = NULL;
+                fclose(*inptr);
+                *inptr = NULL;
+                DeleteFileA(temp_path);
+                return 1;
+            }
+        }
+        if (ferror(*inptr)) {
+            perror("Read error while copying remainder");
+            fclose(*outptr);
+            *outptr = NULL;
+            fclose(*inptr);
+            *inptr = NULL;
+            DeleteFileA(temp_path);
+            return 1;
+        }
+
+        /* flush output to disk */
+        fflush(*outptr);
+#ifdef _WIN32
+        _commit(_fileno(*outptr));
+#endif
+    }
+
+    /* Close input if open */
+    if (inptr && *inptr) {
         fclose(*inptr);
         *inptr = NULL;
     }
-    if (*outptr) {
+
+    /* If output is open, close and move temp into place */
+    if (outptr && *outptr) {
         fclose(*outptr);
         *outptr = NULL;
-        /* replace original output (if exists) */
-        /* Delete destination (ignore errors) */
+        /* replace destination (ignore DeleteFileA errors) */
         DeleteFileA(cur_output);
         if (!MoveFileA(temp_path, cur_output)) {
             fprintf(stderr, "Failed to move temp '%s' -> '%s' (err %lu)\n", temp_path, cur_output, GetLastError());
-            /* Try to remove temp */
             DeleteFileA(temp_path);
             return 1;
         }
     }
+
     return 0;
 }
 
@@ -144,7 +182,7 @@ int apply_patch(const char* patch_file, const patch_options_t* options) {
 
             if (input || output) {
                 if (options->verbose)
-                    printf("Finalizing the previous file: %s, new_file");
+                    printf("Finalizing the previous file: %s\n", new_file);
                 if (finalize_file(&input, &output, new_file, temp_path, options) != 0) {
                     fclose(patch);
                     return 1;
@@ -235,6 +273,17 @@ int apply_patch(const char* patch_file, const patch_options_t* options) {
                     break;
                 }
 
+                /* If this line looks like the start of a file header or next hunk,
+                   push it back and stop processing the current hunk.
+                   This prevents lines like "+++ new.cmd ..." or "--- old.cmd ..." from
+                   being treated as hunk content. */
+                if (strncmp(line, "+++ ", 4) == 0 || strncmp(line, "--- ", 4) == 0 || strncmp(line, "@@ ", 3) == 0) {
+                    strncpy(pushback, line, MAX_LINE);
+                    pushback[MAX_LINE - 1] = '\0';
+                    has_pushback = 1;
+                    break;
+                }
+
                 /* In binary mode fgets will include CR if present; for hunk control characters
                    we only check the first byte which will be '-'/'+'/' ' when properly formatted. */
                 if (line[0] == '-') {
@@ -259,6 +308,7 @@ int apply_patch(const char* patch_file, const patch_options_t* options) {
                 } else {
                     /* This is the start of the next hunk or next file header.
                        Push the line back so outer loop will process it (no fseek). */
+                    /* Normally shouldn't get here */
                     strncpy(pushback, line, MAX_LINE);
                     pushback[MAX_LINE - 1] = '\0';
                     has_pushback = 1;
