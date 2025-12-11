@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "csw.h"
 
 #ifdef _WIN32
 #include <io.h>
@@ -20,6 +21,58 @@ typedef struct patch_options {
     unsigned int apply_dates : 1;
     unsigned int verbose : 1;
 } patch_options_t;
+
+char* sw_fgets(stream_wrapper_t* sw, char* line, int maxlen) {
+    if (!line || maxlen <= 1 || !sw)
+        return NULL;
+
+    size_t i = 0;
+
+    while (i + 1 < (size_t)maxlen) {
+
+        /* Read one byte */
+        char ch;
+        int stat = sw->read(sw, &ch, 1, 1);
+
+        if (stat < 0) {
+            /* Read error → NULL (like fgets) */
+            return NULL;
+        }
+        if (stat == 0) {
+            /* EOF */
+            if (i == 0)
+                return NULL; /* No data → NULL */
+            break;           /* Partial line OK */
+        }
+
+        line[i++] = ch;
+
+        /* Normal newline */
+        if (ch == '\n')
+            break;
+
+        if (ch == '\r') {
+            /* possible CRLF */
+            char next;
+            stat = sw->read(sw, &next, 1, 1);
+
+            if (stat == 1) {
+                if (next == '\n') {
+                    if (i + 1 < (size_t)maxlen)
+                        line[i++] = next; /* include LF */
+                } else {
+                    /* not LF → push back */
+                    sw->seekg(sw, -1, SEEK_CUR);
+                }
+            }
+
+            break;
+        }
+    }
+
+    line[i] = '\0';
+    return line;
+}
 
 void trim_newline(char* line) {
     size_t len = strlen(line);
@@ -136,15 +189,13 @@ static const char* parse_header_filename(const char* p, char* out_fname, size_t 
     return p;
 }
 
-int apply_patch(const char* patch_file, const patch_options_t* options) {
-    /* Open patch file in binary mode to avoid text-mode newline translations */
-    FILE* patch = fopen(patch_file, "rb");
-    if (!patch) {
-        fprintf(stderr, "Cannot open patch file: %s\n", patch_file);
+int apply_patch(stream_wrapper_t* sw, const patch_options_t* options) {
+    if (sw == NULL) {
+        fprintf(stderr, "Invalid stream handle");
         return 1;
     }
     if (options->verbose)
-        printf("Opened patch '%s'\n", patch_file);
+        printf("Opened patch\n");
 
     char line[MAX_LINE];
     char pushback[MAX_LINE];
@@ -166,7 +217,7 @@ int apply_patch(const char* patch_file, const patch_options_t* options) {
             line[MAX_LINE - 1] = '\0';
             has_pushback = 0;
         } else {
-            if (!fgets(line, MAX_LINE, patch))
+            if (!sw_fgets(sw, line, MAX_LINE))
                 break;
         }
 
@@ -184,7 +235,7 @@ int apply_patch(const char* patch_file, const patch_options_t* options) {
                 if (options->verbose)
                     printf("Finalizing the previous file: %s\n", new_file);
                 if (finalize_file(&input, &output, new_file, temp_path, options) != 0) {
-                    fclose(patch);
+                    sw->close(sw);
                     return 1;
                 }
                 /* reset filenames/timestamp */
@@ -220,7 +271,7 @@ int apply_patch(const char* patch_file, const patch_options_t* options) {
             input = fopen(read_path, "rb");
             if (!input) {
                 fprintf(stderr, "Cannot open target file: %s\n", read_path);
-                fclose(patch);
+                sw->close(sw);
                 return 1;
             }
 
@@ -231,7 +282,7 @@ int apply_patch(const char* patch_file, const patch_options_t* options) {
             if (!output) {
                 fprintf(stderr, "Cannot create temp file: %s\n", temp_path);
                 fclose(input);
-                fclose(patch);
+                sw->close(sw);
                 return 1;
             }
 
@@ -252,7 +303,7 @@ int apply_patch(const char* patch_file, const patch_options_t* options) {
 
             if (!input || !output) {
                 fprintf(stderr, "Hunk encountered but no file opened for patching.\n");
-                fclose(patch);
+                sw->close(sw);
                 return 1;
             }
 
@@ -268,7 +319,7 @@ int apply_patch(const char* patch_file, const patch_options_t* options) {
 
             /* Process hunk lines; when a non-hunk line is read, push it back for outer loop */
             while (1) {
-                if (!fgets(line, MAX_LINE, patch)) {
+                if(!sw_fgets(sw, line, MAX_LINE)) {
                     /* EOF while inside hunk; break out */
                     break;
                 }
@@ -326,12 +377,12 @@ int apply_patch(const char* patch_file, const patch_options_t* options) {
         if (options->verbose)
             printf("Finalizing last file: %s\n", new_file);
         if (finalize_file(&input, &output, new_file, temp_path, options) != 0) {
-            fclose(patch);
+            sw->close(sw);
             return 1;
         }
     }
 
-    fclose(patch);
+    sw->close(sw);
     return 0;
 }
 
@@ -360,5 +411,13 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    return apply_patch(patchfile, &options);
+    FILE* fp = fopen(patchfile, "rb");
+    if (!fp) {
+        fprintf(stderr, "Cannot open %s\n", patchfile);    
+    }
+
+    stream_wrapper_t file_sw = { 0 };
+    make_fdsw(&file_sw, fp);
+
+    return apply_patch(&file_sw, &options);
 }
