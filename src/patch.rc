@@ -71,8 +71,8 @@ IDI_ICON1               ICON                    "../res/patch.ico"
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,0,0,2
- PRODUCTVERSION 1,0,0,1
+ FILEVERSION 1,0,1,0
+ PRODUCTVERSION 1,0,1,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0xbL
@@ -89,12 +89,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Aragajaga"
             VALUE "FileDescription", "Minimal unified-diff patcher"
-            VALUE "FileVersion", "1.0.0.2"
+            VALUE "FileVersion", "1.0.1.0"
             VALUE "InternalName", "patch.exe"
             VALUE "LegalCopyright", "Copyright (C) 2025 Aragajaga"
             VALUE "OriginalFilename", "patch.exe"
             VALUE "ProductName", "patch"
-            VALUE "ProductVersion", "1.0.0.1"
+            VALUE "ProductVersion", "1.0.1.0"
         END
     END
     BLOCK "VarFileInfo"
