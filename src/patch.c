@@ -122,22 +122,24 @@ void trim_newline(char* line) {
 /* finalize currently open output: copy remainder (line-by-line) if both files open,
  * close handles, move temp into place. Return 0 on success, non-zero on error.
  */
-int finalize_file(FILE** inptr, FILE** outptr, char* cur_output, char* temp_path, const patch_options_t* options) {
+int finalize_file(stream_wrapper_t* in_stream, stream_wrapper_t* out_stream, char* cur_output, char* temp_path, const patch_options_t* options) {
     /* If both input and output are open, copy remaining lines from input into output. */
-    if (inptr && *inptr && outptr && *outptr) {
+    if ((in_stream && in_stream->_impl) && (out_stream && out_stream->_impl)) {
         char buf[MAX_LINE];
-        while (fgets(buf, sizeof(buf), *inptr)) {
-            if (fputs(buf, *outptr) == EOF) {
+        while (sw_fgets(in_stream, buf, sizeof(buf))) {
+            if (sw_fputs(out_stream, buf) == EOF) {
                 perror("Write error while copying remainder");
                 /* cleanup and remove temp */
-                fclose(*outptr);
-                *outptr = NULL;
-                fclose(*inptr);
-                *inptr = NULL;
-                DeleteFileA(temp_path);
+                out_stream->close(out_stream);
+                memset(out_stream, 0, sizeof(stream_wrapper_t));
+                in_stream->close(in_stream);
+                memset (in_stream, 0, sizeof(stream_wrapper_t));
+                /* TODO: Check for is it a file? I think it's cbk duty
+                DeleteFileA(temp_path); */
                 return 1;
             }
         }
+        /* TODO(csw):
         if (ferror(*inptr)) {
             perror("Read error while copying remainder");
             fclose(*outptr);
@@ -147,31 +149,36 @@ int finalize_file(FILE** inptr, FILE** outptr, char* cur_output, char* temp_path
             DeleteFileA(temp_path);
             return 1;
         }
+        */
 
         /* flush output to disk */
+        /* TODO(csw)?
         fflush(*outptr);
 #ifdef _WIN32
         _commit(_fileno(*outptr));
 #endif
+        */
     }
 
     /* Close input if open */
-    if (inptr && *inptr) {
-        fclose(*inptr);
-        *inptr = NULL;
+    if (in_stream && in_stream->_impl) {
+        in_stream->close(in_stream);
+        memset(in_stream, 0, sizeof(stream_wrapper_t));
     }
 
     /* If output is open, close and move temp into place */
-    if (outptr && *outptr) {
-        fclose(*outptr);
-        *outptr = NULL;
+    if (out_stream && out_stream->_impl) {
+        out_stream->close(out_stream);
+        memset(out_stream, 0, sizeof(stream_wrapper_t));
         /* replace destination (ignore DeleteFileA errors) */
+        /* TODO: Same. It could be a memory stream or socket. Check if it's a file or delegate this task to a cbk.
         DeleteFileA(cur_output);
         if (!MoveFileA(temp_path, cur_output)) {
             fprintf(stderr, "Failed to move temp '%s' -> '%s' (err %lu)\n", temp_path, cur_output, GetLastError());
             DeleteFileA(temp_path);
             return 1;
         }
+        */
     }
 
     return 0;
