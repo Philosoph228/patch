@@ -39,20 +39,22 @@ int patch_call_user_cbk(patch_instance_data_t* instance, patch_evt_t* evt) {
 }
 
 /* private */
-int patch_acquire_user_stream(patch_instance_data_t* instance, char* path, stream_wrapper_t* sw_ptr) {
+int patch_acquire_user_stream(patch_instance_data_t* instance, char* path, stream_wrapper_t* sw_ptr, unsigned int purpose) {
     patch_evt_t event = { 0 };
     event.type = PATCH_EVT_STREAM_ACQUIRE;
     event.data.stream_event.path = path;
     event.data.stream_event.stream = sw_ptr;
+    event.data.stream_event.purpose = purpose;
     return patch_call_user_cbk(instance, &event);
 }
 
 /* private */
-int patch_release_user_stream(patch_instance_data_t* instance, char* path, stream_wrapper_t* sw_ptr) {
+int patch_release_user_stream(patch_instance_data_t* instance, char* path, stream_wrapper_t* sw_ptr, unsigned int purpose) {
     patch_evt_t event = { 0 };
     event.type = PATCH_EVT_STREAM_RELEASE;
     event.data.stream_event.path = path;
     event.data.stream_event.stream = sw_ptr;
+    event.data.stream_event.purpose = purpose;
     return patch_call_user_cbk(instance, &event);
 }
 

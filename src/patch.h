@@ -10,6 +10,9 @@
 #define PATCH_EVT_STREAM_ACQUIRE 0x1
 #define PATCH_EVT_STREAM_RELEASE 0x2
 
+#define PATCH_STREAM_PURPOSE_INPUT 0x1
+#define PATCH_STREAM_PURPOSE_OUTPUT 0x2
+
 typedef struct patch_evt {
     unsigned int type;
     void* userdata;
@@ -17,6 +20,7 @@ typedef struct patch_evt {
         struct {
             char* path;
             stream_wrapper_t* stream;
+            unsigned int purpose;
         } stream_event;
     } data;
 } patch_evt_t;
