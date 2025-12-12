@@ -89,6 +89,29 @@ char* sw_fgets(stream_wrapper_t* sw, char* line, int maxlen) {
     return line;
 }
 
+int sw_fputs(stream_wrapper_t* sw, const char* s) {
+    if (!sw || !s)
+        return -1; /* error */
+
+    size_t len = 0;
+
+    /* Compute length of string */
+    while (s[len] != '\0') {
+        len++;
+    }
+
+    if (len == 0)
+        return 0; /* nothing to write */
+
+    /* Write to stream */
+    long written = sw->write(sw, s, 1, len);
+
+    if (written < 0 || (size_t)written != len)
+        return -1; /* write error */
+
+    return (int)len; /* return number of characters written */
+}
+
 void trim_newline(char* line) {
     size_t len = strlen(line);
     while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r')) {
