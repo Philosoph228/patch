@@ -304,7 +304,6 @@ int apply_patch(void* self, stream_wrapper_t* sw) {
     char new_file[MAX_PATH_LEN] = {0};
     stream_wrapper_t output_stream = { 0 };
     stream_wrapper_t input_stream = { 0 };
-    char temp_path[MAX_PATH_LEN];
 
     int cur_input_line = 1; /* track current line number in input file (1-based) */
 
@@ -333,7 +332,7 @@ int apply_patch(void* self, stream_wrapper_t* sw) {
             if (input_stream._impl || output_stream._impl) {
                 if (options->verbose)
                     printf("Finalizing the previous file: %s\n", new_file);
-                if (finalize_file(instance, &input_stream, &output_stream, new_file, temp_path) != 0) {
+                if (finalize_file(instance, &input_stream, &output_stream, orig_file, new_file) != 0) {
                     sw->close(sw);
                     return 1;
                 }
@@ -367,19 +366,17 @@ int apply_patch(void* self, stream_wrapper_t* sw) {
             const char* write_path = write_inplace ? orig_file : new_file;
 
             /* Open the target file in binary mode to preserve bytes */
-            int stat = patch_acquire_user_stream(instance, read_path, &input_stream);
+            int stat = patch_acquire_user_stream(instance, read_path, &input_stream, PATCH_STREAM_PURPOSE_INPUT);
             if (stat != 0) {
-                fprintf(stderr, "Cannot open target file: %s\n", read_path);
+                fprintf(stderr, "Cannot open source file: %s\n", read_path);
                 sw->close(sw);
                 return 1;
             }
 
             /* create temp path based on write_path */
-            snprintf(temp_path, sizeof(temp_path), "%s.tmp", write_path);
-            temp_path[sizeof(temp_path) - 1] = '\0';
-            stat = patch_acquire_user_stream(instance, temp_path, &output_stream);
+            stat = patch_acquire_user_stream(instance, write_path, &output_stream, PATCH_STREAM_PURPOSE_OUTPUT);
             if (stat != 0) {
-                fprintf(stderr, "Cannot create temp file: %s\n", temp_path);
+                fprintf(stderr, "Cannot create resulted patched file: %s\n", write_path);
                 sw->close(sw);
                 return 1;
             }
@@ -474,7 +471,7 @@ int apply_patch(void* self, stream_wrapper_t* sw) {
     if (input_stream._impl || output_stream._impl) {
         if (options->verbose)
             printf("Finalizing last file: %s\n", new_file);
-        if (finalize_file(instance, &input_stream, &output_stream, new_file, temp_path) != 0) {
+        if (finalize_file(instance, &input_stream, &output_stream, orig_file, new_file) != 0) {
             sw->close(sw);
             return 1;
         }
