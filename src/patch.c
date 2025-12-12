@@ -27,9 +27,10 @@ typedef struct patch_options {
 typedef struct patch_instance_data {
     patch_options_t options;
     path_cbk_t* path_cbk;
+    void* path_cbk_userdata;
 } patch_instance_data_t;
 
-int default_path_cbk(char* path, stream_wrapper_t* sw) {
+int default_path_cbk(char* path, stream_wrapper_t* sw, void* userdata) {
     FILE* fp = fopen(path, "ab+");
     if (!fp) {
         return -1;
@@ -320,7 +321,7 @@ int apply_patch(void* self, stream_wrapper_t* sw) {
             const char* write_path = write_inplace ? orig_file : new_file;
 
             /* Open the target file in binary mode to preserve bytes */
-            int stat = instance->path_cbk(read_path, &input_stream);
+            int stat = instance->path_cbk(read_path, &input_stream, instance->path_cbk_userdata);
             if (stat != 0) {
                 fprintf(stderr, "Cannot open target file: %s\n", read_path);
                 sw->close(sw);
@@ -330,7 +331,7 @@ int apply_patch(void* self, stream_wrapper_t* sw) {
             /* create temp path based on write_path */
             snprintf(temp_path, sizeof(temp_path), "%s.tmp", write_path);
             temp_path[sizeof(temp_path) - 1] = '\0';
-            stat = instance->path_cbk(temp_path, &output_stream);
+            stat = instance->path_cbk(temp_path, &output_stream, instance->path_cbk_userdata);
             if (stat != 0) {
                 fprintf(stderr, "Cannot create temp file: %s\n", temp_path);
                 sw->close(sw);
@@ -472,12 +473,13 @@ int patch_set_options(void* self, unsigned int opts) {
     return 1;
 }
 
-int patch_set_path_cbk(void* self, path_cbk_t* new_cbk) {
+int patch_set_path_cbk(void* self, path_cbk_t* new_cbk, void* userdata) {
     if (self == NULL) /* Invalid instance pointer */
         return -1;
     patch_instance_data_t* instance = (patch_instance_data_t*)self;
 
     instance->path_cbk = new_cbk;
+    instance->path_cbk_userdata = userdata;
 
     return 0;
 }

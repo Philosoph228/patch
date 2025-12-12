@@ -7,7 +7,7 @@
 #define PATCH_OPTION_APPLYDATES 0x2
 #define PATCH_OPTION_VERBOSE    0x4
 
-typedef int (path_cbk_t)(char* str, stream_wrapper_t* stream);
+typedef int (path_cbk_t)(char* str, stream_wrapper_t* stream, void* userdata);
 
 /* Init patcher instance
  *
@@ -31,7 +31,7 @@ int patch_set_options(void* self, unsigned int opts);
  *
  * returns 0 on success, non-0 on error
  */
-int patch_set_path_cbk(void* self, path_cbk_t* new_cbk);
+int patch_set_path_cbk(void* self, path_cbk_t* new_cbk, void* userdata);
 
 /*
  * Load the diff from stream and do the work
