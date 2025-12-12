@@ -372,7 +372,7 @@ int apply_patch(void* self, stream_wrapper_t* sw) {
             const char* write_path = write_inplace ? orig_file : new_file;
 
             /* Open the target file in binary mode to preserve bytes */
-            int stat = instance->path_cbk(read_path, &input_stream, instance->path_cbk_userdata);
+            int stat = patch_acquire_user_stream(instance, read_path, &input_stream);
             if (stat != 0) {
                 fprintf(stderr, "Cannot open target file: %s\n", read_path);
                 sw->close(sw);
@@ -382,7 +382,7 @@ int apply_patch(void* self, stream_wrapper_t* sw) {
             /* create temp path based on write_path */
             snprintf(temp_path, sizeof(temp_path), "%s.tmp", write_path);
             temp_path[sizeof(temp_path) - 1] = '\0';
-            stat = instance->path_cbk(temp_path, &output_stream, instance->path_cbk_userdata);
+            stat = patch_acquire_user_stream(instance, temp_path, &output_stream);
             if (stat != 0) {
                 fprintf(stderr, "Cannot create temp file: %s\n", temp_path);
                 sw->close(sw);
