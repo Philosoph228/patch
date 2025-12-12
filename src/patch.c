@@ -174,7 +174,10 @@ void trim_newline(char* line) {
 /* finalize currently open output: copy remainder (line-by-line) if both files open,
  * close handles, move temp into place. Return 0 on success, non-zero on error.
  */
-int finalize_file(stream_wrapper_t* in_stream, stream_wrapper_t* out_stream, char* cur_output, char* temp_path, const patch_options_t* options) {
+int finalize_file(patch_instance_data_t* instance, stream_wrapper_t* in_stream, stream_wrapper_t* out_stream, char* cur_output, char* temp_path) {
+    if (instance == NULL)   /* Invalid instance pointer */
+        return 0;
+
     /* If both input and output are open, copy remaining lines from input into output. */
     if ((in_stream && in_stream->_impl) && (out_stream && out_stream->_impl)) {
         char buf[MAX_LINE];
@@ -182,9 +185,9 @@ int finalize_file(stream_wrapper_t* in_stream, stream_wrapper_t* out_stream, cha
             if (sw_fputs(out_stream, buf) <= 0) {
                 perror("Write error while copying remainder");
                 /* cleanup and remove temp */
-                out_stream->close(out_stream);
+                patch_release_user_stream(instance, temp_path, out_stream);
                 memset(out_stream, 0, sizeof(stream_wrapper_t));
-                in_stream->close(in_stream);
+                patch_release_user_stream(instance, NULL /* TBD */, in_stream);
                 memset (in_stream, 0, sizeof(stream_wrapper_t));
                 /* TODO: Check for is it a file? I think it's cbk duty
                 DeleteFileA(temp_path); */
@@ -214,13 +217,13 @@ int finalize_file(stream_wrapper_t* in_stream, stream_wrapper_t* out_stream, cha
 
     /* Close input if open */
     if (in_stream && in_stream->_impl) {
-        in_stream->close(in_stream);
+        patch_release_user_stream(instance, NULL /* TBD */, in_stream);
         memset(in_stream, 0, sizeof(stream_wrapper_t));
     }
 
     /* If output is open, close and move temp into place */
     if (out_stream && out_stream->_impl) {
-        out_stream->close(out_stream);
+        patch_release_user_stream(instance, temp_path, out_stream);
         memset(out_stream, 0, sizeof(stream_wrapper_t));
         /* replace destination (ignore DeleteFileA errors) */
         /* TODO: Same. It could be a memory stream or socket. Check if it's a file or delegate this task to a cbk.
@@ -338,7 +341,7 @@ int apply_patch(void* self, stream_wrapper_t* sw) {
             if (input_stream._impl || output_stream._impl) {
                 if (options->verbose)
                     printf("Finalizing the previous file: %s\n", new_file);
-                if (finalize_file(&input_stream, &output_stream, new_file, temp_path, options) != 0) {
+                if (finalize_file(instance, &input_stream, &output_stream, new_file, temp_path) != 0) {
                     sw->close(sw);
                     return 1;
                 }
@@ -479,7 +482,7 @@ int apply_patch(void* self, stream_wrapper_t* sw) {
     if (input_stream._impl || output_stream._impl) {
         if (options->verbose)
             printf("Finalizing last file: %s\n", new_file);
-        if (finalize_file(&input_stream, &output_stream, new_file, temp_path, options) != 0) {
+        if (finalize_file(instance, &input_stream, &output_stream, new_file, temp_path) != 0) {
             sw->close(sw);
             return 1;
         }
