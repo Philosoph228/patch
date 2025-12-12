@@ -21,7 +21,7 @@ typedef struct patch_evt {
     } data;
 } patch_evt_t;
 
-typedef int (path_cbk_t)(char* str, stream_wrapper_t* stream, void* userdata);
+typedef int (patch_event_cbk_t)(patch_evt_t* evt);
 
 /* Init patcher instance
  *
@@ -45,7 +45,7 @@ int patch_set_options(void* self, unsigned int opts);
  *
  * returns 0 on success, non-0 on error
  */
-int patch_set_path_cbk(void* self, path_cbk_t* new_cbk, void* userdata);
+int patch_set_path_cbk(void* self, patch_event_cbk_t* new_cbk, void* userdata);
 
 /*
  * Load the diff from stream and do the work

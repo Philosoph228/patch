@@ -26,7 +26,7 @@ typedef struct patch_options {
 
 typedef struct patch_instance_data {
     patch_options_t options;
-    path_cbk_t* path_cbk;
+    patch_event_cbk_t* path_cbk;
     void* path_cbk_userdata;
 } patch_instance_data_t;
 
@@ -499,7 +499,7 @@ int patch_set_options(void* self, unsigned int opts) {
     return 1;
 }
 
-int patch_set_path_cbk(void* self, path_cbk_t* new_cbk, void* userdata) {
+int patch_set_path_cbk(void* self, patch_event_cbk_t* new_cbk, void* userdata) {
     if (self == NULL) /* Invalid instance pointer */
         return -1;
     patch_instance_data_t* instance = (patch_instance_data_t*)self;
