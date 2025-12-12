@@ -30,6 +30,32 @@ typedef struct patch_instance_data {
     void* path_cbk_userdata;
 } patch_instance_data_t;
 
+/* private */
+int patch_call_user_cbk(patch_instance_data_t* instance, patch_evt_t* evt) {
+    if (instance == NULL)   /* Invalid instance pointer */
+        return -1;
+    evt->userdata = instance->path_cbk_userdata;
+    return instance->path_cbk(evt);
+}
+
+/* private */
+int patch_acquire_user_stream(patch_instance_data_t* instance, char* path, stream_wrapper_t* sw_ptr) {
+    patch_evt_t event = { 0 };
+    event.type = PATCH_EVT_STREAM_ACQUIRE;
+    event.data.stream_event.path = path;
+    event.data.stream_event.stream = sw_ptr;
+    return patch_call_user_cbk(instance, &event);
+}
+
+/* private */
+int patch_release_user_stream(patch_instance_data_t* instance, char* path, stream_wrapper_t* sw_ptr) {
+    patch_evt_t event = { 0 };
+    event.type = PATCH_EVT_STREAM_RELEASE;
+    event.data.stream_event.path = path;
+    event.data.stream_event.stream = sw_ptr;
+    return patch_call_user_cbk(instance, &event);
+}
+
 int default_path_cbk(char* path, stream_wrapper_t* sw, void* userdata) {
     FILE* fp = fopen(path, "ab+");
     if (!fp) {

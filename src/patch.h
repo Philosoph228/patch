@@ -7,6 +7,20 @@
 #define PATCH_OPTION_APPLYDATES 0x2
 #define PATCH_OPTION_VERBOSE    0x4
 
+#define PATCH_EVT_STREAM_ACQUIRE 0x1
+#define PATCH_EVT_STREAM_RELEASE 0x2
+
+typedef struct patch_evt {
+    unsigned int type;
+    void* userdata;
+    union {
+        struct {
+            char* path;
+            stream_wrapper_t* stream;
+        } stream_event;
+    } data;
+} patch_evt_t;
+
 typedef int (path_cbk_t)(char* str, stream_wrapper_t* stream, void* userdata);
 
 /* Init patcher instance
