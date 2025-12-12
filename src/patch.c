@@ -29,6 +29,14 @@ typedef struct patch_instance_data {
     int (*path_cbk)(char* str, stream_wrapper_t* stream);
 } patch_instance_data_t;
 
+int default_path_cbk(char* path, stream_wrapper_t* sw) {
+    FILE* fp = fopen(path, "ab+");
+    if (!fp) {
+        return -1;
+    }
+    return make_fdsw(sw, fp);
+}
+
 char* sw_fgets(stream_wrapper_t* sw, char* line, int maxlen) {
     if (!line || maxlen <= 1 || !sw)
         return NULL;
