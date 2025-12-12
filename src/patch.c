@@ -179,7 +179,7 @@ int finalize_file(stream_wrapper_t* in_stream, stream_wrapper_t* out_stream, cha
     if ((in_stream && in_stream->_impl) && (out_stream && out_stream->_impl)) {
         char buf[MAX_LINE];
         while (sw_fgets(in_stream, buf, sizeof(buf))) {
-            if (sw_fputs(out_stream, buf) == EOF) {
+            if (sw_fputs(out_stream, buf) <= 0) {
                 perror("Write error while copying remainder");
                 /* cleanup and remove temp */
                 out_stream->close(out_stream);
