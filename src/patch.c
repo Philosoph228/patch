@@ -248,8 +248,8 @@ int apply_patch(void* self, stream_wrapper_t* sw) {
 
     char orig_file[MAX_PATH_LEN] = {0};
     char new_file[MAX_PATH_LEN] = {0};
-    FILE* output = NULL;
-    FILE* input = NULL;
+    stream_wrapper_t output_stream = { 0 };
+    stream_wrapper_t input_stream = { 0 };
     char temp_path[MAX_PATH_LEN];
 
     int cur_input_line = 1; /* track current line number in input file (1-based) */
@@ -276,10 +276,10 @@ int apply_patch(void* self, stream_wrapper_t* sw) {
         if (strncmp(line_copy, "--- ", 4) == 0) {
             /* When starting a new diff, if we have currently open input/output finalize it first. */
 
-            if (input || output) {
+            if (input_stream._impl || output_stream._impl) {
                 if (options->verbose)
                     printf("Finalizing the previous file: %s\n", new_file);
-                if (finalize_file(&input, &output, new_file, temp_path, options) != 0) {
+                if (finalize_file(&input_stream, &output_stream, new_file, temp_path, options) != 0) {
                     sw->close(sw);
                     return 1;
                 }
@@ -298,13 +298,13 @@ int apply_patch(void* self, stream_wrapper_t* sw) {
             /* the rest of the line may be a timestamp. */
 
             /* At this point we have both orig_file and new_file (or at least new_file). Open input and output */
-            if (input) {
-                fclose(input);
-                input = NULL;
+            if (input_stream._impl) {
+                input_stream.close(&input_stream);
+                memset(&input_stream, 0, sizeof(stream_wrapper_t));
             }
-            if (output) {
-                fclose(output);
-                output = NULL;
+            if (output_stream._impl) {
+                output_stream.close(&output_stream);
+                memset(&output_stream, 0, sizeof(stream_wrapper_t));
             }
 
             /* Determine where to read and where to write based on  */
@@ -313,8 +313,8 @@ int apply_patch(void* self, stream_wrapper_t* sw) {
             const char* write_path = write_inplace ? orig_file : new_file;
 
             /* Open the target file in binary mode to preserve bytes */
-            input = fopen(read_path, "rb");
-            if (!input) {
+            int stat = instance->path_cbk(read_path, &input_stream);
+            if (stat != 0) {
                 fprintf(stderr, "Cannot open target file: %s\n", read_path);
                 sw->close(sw);
                 return 1;
@@ -323,10 +323,9 @@ int apply_patch(void* self, stream_wrapper_t* sw) {
             /* create temp path based on write_path */
             snprintf(temp_path, sizeof(temp_path), "%s.tmp", write_path);
             temp_path[sizeof(temp_path) - 1] = '\0';
-            output = fopen(temp_path, "wb");
-            if (!output) {
+            stat = instance->path_cbk(temp_path, &output_stream);
+            if (stat != 0) {
                 fprintf(stderr, "Cannot create temp file: %s\n", temp_path);
-                fclose(input);
                 sw->close(sw);
                 return 1;
             }
@@ -346,7 +345,7 @@ int apply_patch(void* self, stream_wrapper_t* sw) {
                     len_new = 1;
             }
 
-            if (!input || !output) {
+            if (!input_stream._impl || !output_stream._impl) {
                 fprintf(stderr, "Hunk encountered but no file opened for patching.\n");
                 sw->close(sw);
                 return 1;
@@ -356,9 +355,9 @@ int apply_patch(void* self, stream_wrapper_t* sw) {
             char file_line[MAX_LINE];
             int i;
             for (i = cur_input_line; i < start_old; ++i) {
-                if (!fgets(file_line, MAX_LINE, input))
+                if (!sw_fgets(&input_stream, file_line, MAX_LINE))
                     break;
-                fputs(file_line, output);
+                sw_fputs(&output_stream, file_line);
                 ++cur_input_line;
             }
 
@@ -384,22 +383,22 @@ int apply_patch(void* self, stream_wrapper_t* sw) {
                    we only check the first byte which will be '-'/'+'/' ' when properly formatted. */
                 if (line[0] == '-') {
                     /* deleted line: consume one line from input but do not write it */
-                    if (fgets(file_line, MAX_LINE, input)) {
+                    if (sw_fgets(&input_stream, file_line, MAX_LINE)) {
                         ++cur_input_line;
                     } else {
                         /* unexpected EOF in input; continue */
                     }
                 } else if (line[0] == '+') {
                     /* added line: write without consuming input; write everything after the '+' */
-                    fputs(line + 1, output);
+                    sw_fputs(&output_stream, line + 1);
                 } else if (line[0] == ' ') {
                     /* context line: copy from input to output */
-                    if (fgets(file_line, MAX_LINE, input)) {
-                        fputs(file_line, output);
+                    if (sw_fgets(&input_stream, file_line, MAX_LINE)) {
+                        sw_fputs(&output_stream, file_line);
                         ++cur_input_line;
                     } else {
                         /* unexpected EOF in input; still write the context from patch */
-                        fputs(line + 1, output);
+                        sw_fputs(&output_stream, line + 1);
                     }
                 } else {
                     /* This is the start of the next hunk or next file header.
@@ -418,10 +417,10 @@ int apply_patch(void* self, stream_wrapper_t* sw) {
     }
 
     /* after loop, finalize any remaining open file */
-    if (input || output) {
+    if (input_stream._impl || output_stream._impl) {
         if (options->verbose)
             printf("Finalizing last file: %s\n", new_file);
-        if (finalize_file(&input, &output, new_file, temp_path, options) != 0) {
+        if (finalize_file(&input_stream, &output_stream, new_file, temp_path, options) != 0) {
             sw->close(sw);
             return 1;
         }
