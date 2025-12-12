@@ -12,7 +12,7 @@ int main() {
     static const char diff_source[] =
         "--- input.txt\r\n"
         "+++ output.txt\r\n"
-        "@ -1,4 +1,7 @\r\n"
+        "@@ -1,4 +1,7 @@\r\n"
         "+#include <stdio.h>\r\n"
         "+\r\n"
         " int main() {\r\n"
