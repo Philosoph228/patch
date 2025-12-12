@@ -410,6 +410,9 @@ int apply_patch(void* self, stream_wrapper_t* sw) {
 
 void* patch_init() {
     patch_instance_data_t* instance = calloc(1, sizeof(patch_instance_data_t));
+
+    instance->path_cbk = &default_path_cbk;
+
     return instance;
 }
 
