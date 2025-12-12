@@ -10,7 +10,7 @@ typedef struct simple_test_data {
 
 static const char input_txt_source[] =
     "int main() {\r\n"
-    "    return 0;\r\n"
+    "  return 0;\r\n"
     "}\r\n"
     "\r\n";
 
