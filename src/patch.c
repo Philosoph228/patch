@@ -173,10 +173,11 @@ void trim_newline(char* line) {
     }
 }
 
-/* finalize currently open output: copy remainder (line-by-line) if both files open,
- * close handles, move temp into place. Return 0 on success, non-zero on error.
+/* finalize currently open output: copy remainder (line-by-line) if both files open
+ * requests the user to unref streams
+ * Return 0 on success, non-zero on error.
  */
-int finalize_file(patch_instance_data_t* instance, stream_wrapper_t* in_stream, stream_wrapper_t* out_stream, char* cur_output, char* temp_path) {
+int finalize_file(patch_instance_data_t* instance, stream_wrapper_t* in_stream, stream_wrapper_t* out_stream, char* in_path, char* out_path) {
     if (instance == NULL)   /* Invalid instance pointer */
         return 0;
 
@@ -187,12 +188,10 @@ int finalize_file(patch_instance_data_t* instance, stream_wrapper_t* in_stream, 
             if (sw_fputs(out_stream, buf) <= 0) {
                 perror("Write error while copying remainder");
                 /* cleanup and remove temp */
-                patch_release_user_stream(instance, temp_path, out_stream);
+                patch_release_user_stream(instance, out_path, out_stream, PATCH_STREAM_PURPOSE_OUTPUT);
                 memset(out_stream, 0, sizeof(stream_wrapper_t));
-                patch_release_user_stream(instance, NULL /* TBD */, in_stream);
+                patch_release_user_stream(instance, in_path, in_stream, PATCH_STREAM_PURPOSE_INPUT);
                 memset (in_stream, 0, sizeof(stream_wrapper_t));
-                /* TODO: Check for is it a file? I think it's cbk duty
-                DeleteFileA(temp_path); */
                 return 1;
             }
         }
@@ -219,23 +218,14 @@ int finalize_file(patch_instance_data_t* instance, stream_wrapper_t* in_stream, 
 
     /* Close input if open */
     if (in_stream && in_stream->_impl) {
-        patch_release_user_stream(instance, NULL /* TBD */, in_stream);
+        patch_release_user_stream(instance, in_path, in_stream, PATCH_STREAM_PURPOSE_INPUT);
         memset(in_stream, 0, sizeof(stream_wrapper_t));
     }
 
-    /* If output is open, close and move temp into place */
+    /* Close output if open */
     if (out_stream && out_stream->_impl) {
-        patch_release_user_stream(instance, temp_path, out_stream);
+        patch_release_user_stream(instance, out_path, out_stream, PATCH_STREAM_PURPOSE_OUTPUT);
         memset(out_stream, 0, sizeof(stream_wrapper_t));
-        /* replace destination (ignore DeleteFileA errors) */
-        /* TODO: Same. It could be a memory stream or socket. Check if it's a file or delegate this task to a cbk.
-        DeleteFileA(cur_output);
-        if (!MoveFileA(temp_path, cur_output)) {
-            fprintf(stderr, "Failed to move temp '%s' -> '%s' (err %lu)\n", temp_path, cur_output, GetLastError());
-            DeleteFileA(temp_path);
-            return 1;
-        }
-        */
     }
 
     return 0;
