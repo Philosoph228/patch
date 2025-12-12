@@ -9,6 +9,8 @@
 #include <string.h>
 #include "csw.h"
 
+#include "patch.h"
+
 #ifdef _WIN32
 #include <io.h>
 #endif
@@ -411,10 +413,6 @@ int patch_destroy(void* self) {
     free(self);
     return 0;
 }
-
-#define PATCH_OPTION_INPLACE    0x1
-#define PATCH_OPTION_APPLYDATES    0x2
-#define PATCH_OPTION_VERBOSE    0x4
 
 int patch_set_options(void* self, unsigned int opts) {
     if (self == NULL)   /* Invalid instance pointer */
