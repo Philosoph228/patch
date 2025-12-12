@@ -56,12 +56,37 @@ int patch_release_user_stream(patch_instance_data_t* instance, char* path, strea
     return patch_call_user_cbk(instance, &event);
 }
 
-int default_path_cbk(char* path, stream_wrapper_t* sw, void* userdata) {
-    FILE* fp = fopen(path, "ab+");
-    if (!fp) {
+int default_patch_evt_cbk(patch_evt_t* evt) {
+    if (evt == NULL) /* Invalid evt */
         return -1;
+
+    if (evt->type == PATCH_EVT_STREAM_ACQUIRE || evt->type == PATCH_EVT_STREAM_RELEASE) {
+        char* path = evt->data.stream_event.path;
+        stream_wrapper_t* sw = evt->data.stream_event.stream;
+
+        if (sw == NULL) /* invalid stream wrapper provided */
+            return -1;
+
+        switch (evt->type) {
+        case PATCH_EVT_STREAM_ACQUIRE: {
+            /* create a new file stream from path */
+            FILE* fp = fopen(path, "ab+");
+            if (!fp) {  /* Cannot open the file at specified path */
+                return -1;
+            }
+            return make_fdsw(sw, fp);
+        }
+            break;
+        case PATCH_EVT_STREAM_RELEASE: {
+            /* close the file stream at release request */
+            return sw->close(sw);
+        }
+            break;
+        /* default falls to function return */
+        }
     }
-    return make_fdsw(sw, fp);
+
+    return -1;  /* Unknown event, return error */
 }
 
 char* sw_fgets(stream_wrapper_t* sw, char* line, int maxlen) {
@@ -467,7 +492,7 @@ int apply_patch(void* self, stream_wrapper_t* sw) {
 void* patch_init() {
     patch_instance_data_t* instance = calloc(1, sizeof(patch_instance_data_t));
 
-    instance->path_cbk = &default_path_cbk;
+    instance->path_cbk = &default_patch_evt_cbk;
 
     return instance;
 }
