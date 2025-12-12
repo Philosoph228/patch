@@ -2,6 +2,12 @@
 
 #include "../../src/patch.h"
 
+int test_cbk(char* path, stream_wrapper_t* stream) {
+    printf("Patcher requests path: %s\n", path);
+
+    return -1;
+}
+
 int main() {
     static const char diff_source[] =
         "--- input.txt\r\n"
@@ -23,6 +29,7 @@ int main() {
 
     void* patcher = patch_init();
     patch_set_options(patcher, PATCH_OPTION_VERBOSE);
+    patch_set_path_cbk(patcher, (path_cbk_t*)&test_cbk);
     apply_patch(patcher, &diff_source_stream);
     patch_destroy(patcher);
 
