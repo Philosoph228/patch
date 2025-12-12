@@ -22,6 +22,11 @@ typedef struct patch_options {
     unsigned int verbose : 1;
 } patch_options_t;
 
+typedef struct patch_instance_data {
+    patch_options_t options;
+    void (*path_cbk)(char* str);
+} patch_instance_data_t;
+
 char* sw_fgets(stream_wrapper_t* sw, char* line, int maxlen) {
     if (!line || maxlen <= 1 || !sw)
         return NULL;
@@ -189,7 +194,14 @@ static const char* parse_header_filename(const char* p, char* out_fname, size_t 
     return p;
 }
 
-int apply_patch(stream_wrapper_t* sw, const patch_options_t* options) {
+int apply_patch(void* self, stream_wrapper_t* sw) {
+    if (self == NULL)   /* Invalid instance pointer */
+        return 1;
+    patch_instance_data_t* instance = (patch_instance_data_t*)self;
+
+    /* shorthand */
+    patch_options_t* options = &instance->options;
+
     if (sw == NULL) {
         fprintf(stderr, "Invalid stream handle");
         return 1;
@@ -386,6 +398,42 @@ int apply_patch(stream_wrapper_t* sw, const patch_options_t* options) {
     return 0;
 }
 
+void* patch_init() {
+    patch_instance_data_t* instance = calloc(1, sizeof(patch_instance_data_t));
+    return instance;
+}
+
+int patch_destroy(void* self) {
+    if (self == NULL) /* Invalid instance pointer */
+        return -1;
+    patch_instance_data_t* instance = (patch_instance_data_t*)self;
+
+    free(self);
+    return 0;
+}
+
+#define PATCH_OPTION_INPLACE    0x1
+#define PATCH_OPTION_APPLYDATES    0x2
+#define PATCH_OPTION_VERBOSE    0x4
+
+int patch_set_options(void* self, unsigned int opts) {
+    if (self == NULL)   /* Invalid instance pointer */
+        return -1;
+    patch_instance_data_t* instance = (patch_instance_data_t*)self;
+
+    if (opts & PATCH_OPTION_INPLACE) {
+        instance->options.inplace = 1;
+    }
+    if (opts & PATCH_OPTION_APPLYDATES) {
+        instance->options.apply_dates = 1;
+    }
+    if (opts & PATCH_OPTION_VERBOSE) {
+        instance->options.verbose = 1;
+    }
+
+    return 1;
+}
+
 int main(int argc, char** argv) {
     /* Simple argument parser (no fancy lib). */
     if (argc < 2) {
@@ -413,11 +461,22 @@ int main(int argc, char** argv) {
 
     FILE* fp = fopen(patchfile, "rb");
     if (!fp) {
-        fprintf(stderr, "Cannot open %s\n", patchfile);    
+        fprintf(stderr, "Cannot open %s\n", patchfile);
+        return 1;
     }
 
     stream_wrapper_t file_sw = { 0 };
     make_fdsw(&file_sw, fp);
 
-    return apply_patch(&file_sw, &options);
+    void* patcher = patch_init();
+    if (patcher == NULL) {
+        fprintf(stderr, "Cannot init patcher instance");
+        return -1;
+    }
+
+    patch_set_options(patcher, PATCH_OPTION_VERBOSE);
+    int stat = apply_patch(patcher, &file_sw);
+    patch_destroy(patcher);
+
+    return stat;
 }
