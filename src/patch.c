@@ -65,14 +65,23 @@ int default_patch_evt_cbk(patch_evt_t* evt) {
     if (evt->type == PATCH_EVT_STREAM_ACQUIRE || evt->type == PATCH_EVT_STREAM_RELEASE) {
         char* path = evt->data.stream_event.path;
         stream_wrapper_t* sw = evt->data.stream_event.stream;
+        unsigned int purpose = evt->data.stream_event.purpose;
 
         if (sw == NULL) /* invalid stream wrapper provided */
             return -1;
 
+        char actual_path[MAX_PATH] = {0};
+        strcpy(actual_path, path);
+        /* If it is output stream, add .tmp extension to create a temporary file */
+        if (purpose == PATCH_STREAM_PURPOSE_OUTPUT) {
+            snprintf(actual_path, sizeof(actual_path), "%s.tmp", path);
+        }
+        actual_path[sizeof(actual_path) - 1] = '\0';
+
         switch (evt->type) {
         case PATCH_EVT_STREAM_ACQUIRE: {
             /* create a new file stream from path */
-            FILE* fp = fopen(path, "ab+");
+            FILE* fp = fopen(actual_path, purpose == PATCH_STREAM_PURPOSE_OUTPUT ? "wb" : "rb");
             if (!fp) {  /* Cannot open the file at specified path */
                 return -1;
             }
@@ -81,6 +90,18 @@ int default_patch_evt_cbk(patch_evt_t* evt) {
             break;
         case PATCH_EVT_STREAM_RELEASE: {
             /* close the file stream at release request */
+
+            if (purpose == PATCH_STREAM_PURPOSE_OUTPUT) {
+                sw->close(sw);  /* first close the tmp file */
+                /* move temp into place */
+                DeleteFileA(path); /* delete already existing target file to avoid errors */
+                if (!MoveFileA(actual_path, path)) {
+                    fprintf(stderr, "Failed to move temp '%s' -> '%s' (err %lu)\n", actual_path, path, GetLastError());
+                    DeleteFileA(actual_path);
+                    return -1;
+                }
+            }
+
             return sw->close(sw);
         }
             break;
