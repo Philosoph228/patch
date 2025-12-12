@@ -137,7 +137,6 @@
     <ClInclude Include="..\..\src\csw.h" />
     <ClInclude Include="..\..\src\dynmem.h" />
     <ClInclude Include="..\..\src\patch.h" />
-    <ClInclude Include="..\..\src\resource.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="..\..\src\patch.rc" />
