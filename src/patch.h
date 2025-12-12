@@ -7,6 +7,8 @@
 #define PATCH_OPTION_APPLYDATES 0x2
 #define PATCH_OPTION_VERBOSE    0x4
 
+typedef int (path_cbk_t)(char* str, stream_wrapper_t* stream);
+
 /* Init patcher instance
  *
  * returns pointer to the instance
