@@ -26,7 +26,7 @@ typedef struct patch_options {
 
 typedef struct patch_instance_data {
     patch_options_t options;
-    void (*path_cbk)(char* str);
+    int (*path_cbk)(char* str, stream_wrapper_t* stream);
 } patch_instance_data_t;
 
 char* sw_fgets(stream_wrapper_t* sw, char* line, int maxlen) {
