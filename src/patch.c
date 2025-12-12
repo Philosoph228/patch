@@ -471,3 +471,13 @@ int patch_set_options(void* self, unsigned int opts) {
 
     return 1;
 }
+
+int patch_set_path_cbk(void* self, path_cbk_t* new_cbk) {
+    if (self == NULL) /* Invalid instance pointer */
+        return -1;
+    patch_instance_data_t* instance = (patch_instance_data_t*)self;
+
+    instance->path_cbk = new_cbk;
+
+    return 0;
+}
