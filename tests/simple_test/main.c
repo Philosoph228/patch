@@ -181,6 +181,10 @@ int init_test_context(simple_test_data_t* context_data, const test_case_data_t* 
     make_memsw(&context_data->outfile_owned_stream.stream, &context_data->outfile_owned_stream.mem);
 }
 
+#define COLOR_RED   "\033[31m"
+#define COLOR_GREEN "\033[32m"
+#define COLOR_RESET "\033[0m"
+
 int main() {
 
     test_case_data_t* test_cases[] = {
@@ -200,6 +204,54 @@ int main() {
 
         // dynmem_write(&test_data.outfile_owned_stream.mem, "\0", sizeof(char), 1);
         printf("%.*s<EOF>\n", (int)test_data.outfile_owned_stream.mem.size, test_data.outfile_owned_stream.mem.buf);
+
+         /* Compare produced output to expected, byte-by-byte */
+        const vtf_wrapper_t* expected = test_data.case_data->expected;
+        const char* actual_buf = test_data.outfile_owned_stream.mem.buf;
+        size_t actual_size = test_data.outfile_owned_stream.mem.size;
+        const char* expected_buf = expected->data;
+        size_t expected_size = expected->length;
+
+        size_t line = 1;
+        size_t col = 1;
+        int mismatch_found = 0;
+
+        size_t min_size = (actual_size < expected_size) ? actual_size : expected_size;
+
+        for (size_t pos = 0; pos < min_size; ++pos) {
+            if ((unsigned char)actual_buf[pos] != (unsigned char)expected_buf[pos]) {
+                fprintf(stderr, COLOR_RED "Test case %zu FAILED at line %zu, column %zu\n" COLOR_RESET, i, line, col);
+                fprintf(stderr, COLOR_RED "Expected byte: 0x%02X '%c'\nActual byte:   0x%02X '%c'\n" COLOR_RESET,
+                    (unsigned char)expected_buf[pos],
+                    (expected_buf[pos] >= 32 && expected_buf[pos] <= 126) ? expected_buf[pos] : '.',
+                    (unsigned char)actual_buf[pos],
+                    (actual_buf[pos] >= 32 && actual_buf[pos] <= 126) ? actual_buf[pos] : '.');
+                mismatch_found = 1;
+                break;
+            }
+
+            if (actual_buf[pos] == '\n') {
+                line++;
+                col = 1;
+            } else {
+                col++;
+            }
+        }
+
+        /* Check if sizes differ or extra bytes exist */
+        if (!mismatch_found) {
+            if (actual_size != expected_size) {
+                fprintf(stderr,
+                    COLOR_RED "Test case %zu FAILED: length mismatch\n" COLOR_RESET
+                              "Expected length: %zu\nActual length:   %zu\n",
+                    i, expected_size, actual_size);
+                mismatch_found = 1;
+            }
+        }
+
+        if (!mismatch_found) {
+            printf(COLOR_GREEN "Test case %zu PASSED\n" COLOR_RESET, i);
+        }
 
         patch_destroy(patcher);
     }
