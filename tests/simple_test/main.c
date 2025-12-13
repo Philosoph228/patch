@@ -198,8 +198,8 @@ int main() {
         patch_set_path_cbk(patcher, (patch_event_cbk_t*)&test_cbk, (void*)&test_data);
         apply_patch(patcher, &test_data.diff_owned_stream.stream);
 
-        dynmem_write(&test_data.outfile_owned_stream.mem, "\0", sizeof(char), 1);
-        printf("%s", test_data.outfile_owned_stream.mem.buf);
+        // dynmem_write(&test_data.outfile_owned_stream.mem, "\0", sizeof(char), 1);
+        printf("%.*s<EOF>\n", (int)test_data.outfile_owned_stream.mem.size, test_data.outfile_owned_stream.mem.buf);
 
         patch_destroy(patcher);
     }
