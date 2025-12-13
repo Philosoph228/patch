@@ -3,10 +3,77 @@
 
 #include "../../src/patch.h"
 
+typedef struct owned_dynmem_stream {
+    dynmem_t mem;
+    stream_wrapper_t stream;
+} owned_dynmem_stream_t;
+
+/* virtual text file wrapper */
+typedef struct vtf_wrapper {
+    const char* path;
+    const char* data;
+    size_t length;
+} vtf_wrapper_t;
+
+typedef struct test_case_data {
+    const vtf_wrapper_t* input;
+    const vtf_wrapper_t* diff;
+    const vtf_wrapper_t* expected;
+} test_case_data_t;
+
 typedef struct simple_test_data {
-    dynmem_t input_txt;
-    dynmem_t output_txt;
+    const test_case_data_t* case_data;
+    owned_dynmem_stream_t diff_owned_stream;
+    owned_dynmem_stream_t infile_owned_stream;
+    owned_dynmem_stream_t outfile_owned_stream;
 } simple_test_data_t;
+
+/* generated. Do not edit, use ./scripts/generate_vtf_from_file.py */
+static const vtf_wrapper_t g_test_case_naughty__input = {
+    .path = "./tests/data/naughty/naughty1.txt",
+    .data =
+        "-- old.cmd\t2025-12-10 18:46:54 +0500\r\n"
+        "-- new.cmd\t2025-12-10 18:46:49 +0500\r\n"
+        "@@ -1,4 +1,4 @@\r\n"
+        "- REM Version 0.0.1\r\n"
+        "+ REM Version 0.0.2\r\n",
+    .length = 135,
+};
+
+/* generated. Do not edit, use ./scripts/generate_vtf_from_file.py */
+static const vtf_wrapper_t g_test_case_naughty__diff = {
+    .path = "./tests/data/naughty/diff.patch",
+    .data =
+        "--- ./tests/data/naughty/naughty1.txt\t2025-12-13 05:30:36 +0500\r\n"
+        "+++ ./tests/data/naughty/naughty2.txt\t2025-12-13 05:30:36 +0500\r\n"
+        "@@ -1,5 +1,5 @@\r\n"
+        "--- old.cmd\t2025-12-10 18:46:54 +0500\r\n"
+        "--- new.cmd\t2025-12-10 18:46:49 +0500\r\n"
+        "+++ old.cmd\t2025-12-10 18:46:54 +0500\r\n"
+        "+++ new.cmd\t2025-12-10 18:46:49 +0500\r\n"
+        " @@ -1,4 +1,4 @@\r\n"
+        " - REM Version 0.0.1\r\n"
+        " + REM Version 0.0.2\r\n",
+    .length = 365,
+};
+
+/* generated. Do not edit, use ./scripts/generate_vtf_from_file.py */
+static const vtf_wrapper_t g_test_case_naugty__expected = {
+    .path = "./tests/data/naughty/naughty2.txt",
+    .data =
+        "++ old.cmd\t2025-12-10 18:46:54 +0500\r\n"
+        "++ new.cmd\t2025-12-10 18:46:49 +0500\r\n"
+        "@@ -1,4 +1,4 @@\r\n"
+        "- REM Version 0.0.1\r\n"
+        "+ REM Version 0.0.2\r\n",
+    .length = 135,
+};
+
+static const test_case_data_t g_test_case_naughty = {
+    .input = &g_test_case_naughty__input,
+    .diff = &g_test_case_naughty__diff,
+    .expected = &g_test_case_naugty__expected, 
+};
 
 static const char input_txt_source[] =
     "int main() {\r\n"
@@ -41,17 +108,12 @@ int test_cbk(patch_evt_t* evt) {
 
         switch (evt->type) {
         case PATCH_EVT_STREAM_ACQUIRE: {
-            if (strcmp(path, "input.txt") == 0) {
-                if (dat->input_txt.buf != NULL)
-                    dynmem_free(&dat->input_txt);
-                make_dynmem_as_copy(&dat->input_txt, input_txt_source, sizeof(input_txt_source), 1);
-                make_memsw(sw, &dat->input_txt);
+            if (strcmp(path, dat->case_data->input->path) == 0) {
+                memcpy(sw, &dat->infile_owned_stream.stream, sizeof(stream_wrapper_t));
                 return 0;
-            } else if (strcmp(path, "output.txt.tmp") == 0) {
-                if (dat->output_txt.buf != NULL)
-                    dynmem_free(&dat->output_txt);
-                make_dynmem(&dat->output_txt, 0, 0);
-                make_memsw(sw, &dat->output_txt);
+            }
+            if (strcmp(path, dat->case_data->expected->path) == 0) {
+                memcpy(sw, &dat->outfile_owned_stream.stream, sizeof(stream_wrapper_t));
                 return 0;
             }
             return -1;
@@ -66,37 +128,52 @@ int test_cbk(patch_evt_t* evt) {
     return -1; /* Unknown event, return error */
 }
 
+int init_test_context(simple_test_data_t* context_data, const test_case_data_t* case_data) {
+    if (context_data == NULL)
+        return -1;
+    if (case_data == NULL)
+        return -1;
+
+    context_data->case_data = case_data;
+
+    /* Populate dynmems */
+    dynmem_write(&context_data->diff_owned_stream.mem, case_data->diff->data, case_data->diff->length, 1);
+    dynmem_write(&context_data->infile_owned_stream.mem, case_data->input->data, case_data->input->length, 1);
+    /* empty dynmem for outfile_owned_stream (will initialize itself at first write) */
+    memset(&context_data->outfile_owned_stream.mem, 0, sizeof(dynmem_t));
+
+    /* Make their streams */
+    make_memsw(&context_data->diff_owned_stream.stream, &context_data->diff_owned_stream.mem);
+    make_memsw(&context_data->infile_owned_stream.stream, &context_data->infile_owned_stream.mem);
+    make_memsw(&context_data->outfile_owned_stream.stream, &context_data->outfile_owned_stream.mem);
+}
+
+static const char diff_source[] =
+    "--- input.txt\r\n"
+    "+++ output.txt\r\n"
+    "@@ -1,4 +1,7 @@\r\n"
+    "+#include <stdio.h>\r\n"
+    "+\r\n"
+    " int main() {\r\n"
+    "+  printf(\"Hello, my world!\");\r\n"
+    " return 0;\r\n"
+    " }\r\n"
+    " \r\n";
+
 int main() {
     simple_test_data_t test_data = { 0 };
 
-    static const char diff_source[] =
-        "--- input.txt\r\n"
-        "+++ output.txt\r\n"
-        "@@ -1,4 +1,7 @@\r\n"
-        "+#include <stdio.h>\r\n"
-        "+\r\n"
-        " int main() {\r\n"
-        "+  printf(\"Hello, my world!\");\r\n"
-        " return 0;\r\n"
-        " }\r\n"
-        " \r\n";
-
-    dynmem_t diff_source_mem = { 0 };
-    dynmem_write(&diff_source_mem, diff_source, sizeof(diff_source), 1);
-
-    stream_wrapper_t diff_source_stream = { 0 };
-    make_memsw(&diff_source_stream, &diff_source_mem);
+    init_test_context(&test_data, &g_test_case_naughty);
 
     void* patcher = patch_init();
     patch_set_options(patcher, PATCH_OPTION_VERBOSE);
     patch_set_path_cbk(patcher, (patch_event_cbk_t*)&test_cbk, (void*)&test_data);
-    apply_patch(patcher, &diff_source_stream);
+    apply_patch(patcher, &test_data.diff_owned_stream.stream);
 
-    printf("%s", test_data.output_txt.buf);
+    dynmem_write(&test_data.outfile_owned_stream.mem, "\0", sizeof(char), 1);
+    printf("%s", test_data.outfile_owned_stream.mem.buf);
 
     patch_destroy(patcher);
-
-    
 
     return 0;
 }
