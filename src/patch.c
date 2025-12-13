@@ -434,53 +434,66 @@ int apply_patch(void* self, stream_wrapper_t* sw) {
                 ++cur_input_line;
             }
 
-            /* Process hunk lines; when a non-hunk line is read, push it back for outer loop */
-            while (1) {
-                if(!sw_fgets(sw, line, MAX_LINE)) {
-                    /* EOF while inside hunk; break out */
-                    break;
+            /* Process hunk lines; Strictly track numbers of old/new lines processed
+             * from the @@ header (len_old, len_new). Treat any line that does not
+             * start with ' ', '+' or '-' as the start of the next header and push
+             * it back. If counts are not satisfied when the hunk ends, treat it
+             * as an error (malformed patch). */
+            int proc_old = 0;   /* how many old (input) lines consumed in this hunk */
+            int proc_new = 0;   /* how many new (output) lines consumed in this hunk */
+
+            while (proc_old < len_old || proc_new < len_new) {
+                if (!sw_fgets(sw, line, MAX_LINE)) {
+                    fprintf(stderr, "Unexpected EOF inside hunk header at file '%s'.\n", new_file);
+                    sw->close(sw);
+                    return 1;
                 }
 
-                /* If this line looks like the start of a file header or next hunk,
-                   push it back and stop processing the current hunk.
-                   This prevents lines like "+++ new.cmd ..." or "--- old.cmd ..." from
-                   being treated as hunk content. */
-                if (strncmp(line, "+++ ", 4) == 0 || strncmp(line, "--- ", 4) == 0 || strncmp(line, "@@ ", 3) == 0) {
+                /* Non-hunk-leading char → push back as next header/start and stop. */
+                if (line[0] != ' ' && line[0] != '+' && line[0] != '-') {
                     strncpy(pushback, line, MAX_LINE);
                     pushback[MAX_LINE - 1] = '\0';
                     has_pushback = 1;
                     break;
                 }
 
-                /* In binary mode fgets will include CR if present; for hunk control characters
-                   we only check the first byte which will be '-'/'+'/' ' when properly formatted. */
                 if (line[0] == '-') {
                     /* deleted line: consume one line from input but do not write it */
                     if (sw_fgets(&input_stream, file_line, MAX_LINE)) {
                         ++cur_input_line;
+                        ++proc_old;
                     } else {
-                        /* unexpected EOF in input; continue */
+                        /* unexpected EOF in input; count is as consumed for strictness */
+                        ++proc_old;
                     }
                 } else if (line[0] == '+') {
                     /* added line: write without consuming input; write everything after the '+' */
-                    sw_fputs(&output_stream, line + 1);
-                } else if (line[0] == ' ') {
+                    if (sw_fputs(&output_stream, line + 1) <= 0) {
+                        fprintf(stderr, "Write error while applying hunk");
+                        sw->close(sw);
+                        return 1;
+                    }
+                    ++proc_new;
+                } else {    /* line[0] == ' ' */
                     /* context line: copy from input to output */
                     if (sw_fgets(&input_stream, file_line, MAX_LINE)) {
-                        sw_fputs(&output_stream, file_line);
+                        if (sw_fputs(&output_stream, file_line) <= 0) {
+                            fprintf(stderr, "Write error while applying hunk");
+                            sw->close(sw);
+                            return 1;
+                        }
                         ++cur_input_line;
+                        ++proc_old;
+                        ++proc_new;
                     } else {
-                        /* unexpected EOF in input; still write the context from patch */
-                        sw_fputs(&output_stream, line + 1);
+                        /* unexpected EOF in input; write the provided context instead */
+                        if (sw_fputs(&output_stream, line + 1) <= 0) {
+                            fprintf(stderr, "Write error while applying hunk");
+                            sw->close(sw);
+                            return 1;
+                        }
+                        ++proc_new;
                     }
-                } else {
-                    /* This is the start of the next hunk or next file header.
-                       Push the line back so outer loop will process it (no fseek). */
-                    /* Normally shouldn't get here */
-                    strncpy(pushback, line, MAX_LINE);
-                    pushback[MAX_LINE - 1] = '\0';
-                    has_pushback = 1;
-                    break;
                 }
             }
 
