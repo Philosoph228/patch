@@ -426,7 +426,11 @@ int apply_patch(void* self, stream_wrapper_t* sw) {
             for (i = cur_input_line; i < start_old; ++i) {
                 if (!sw_fgets(&input_stream, file_line, MAX_LINE))
                     break;
-                sw_fputs(&output_stream, file_line);
+                if (sw_fputs(&output_stream, file_line) <= 0) {
+                    fprintf(stderr, "Write error while copying pre-hunk lines");
+                    sw->close(sw);
+                    return 1;
+                }
                 ++cur_input_line;
             }
 
