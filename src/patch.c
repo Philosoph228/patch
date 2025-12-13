@@ -408,13 +408,10 @@ int apply_patch(void* self, stream_wrapper_t* sw) {
             /* hunk header line */
             int start_old = 0, len_old = 0, start_new = 0, len_new = 0;
             int parsed = sscanf(line, "@@ -%d,%d +%d,%d @@", &start_old, &len_old, &start_new, &len_new);
-            if (parsed < 4) {
-                /* try simpler forms; treat missing counts as 1 */
-                parsed = sscanf(line, "@@ -%d +%d @@", &start_old, &start_new);
-                if (parsed >= 1)
-                    len_old = 1;
-                if (parsed >= 2)
-                    len_new = 1;
+            if (parsed != 4) {
+                fprintf(stderr, "Malformed or unsupported hunk header (counts required): %s\n", line);
+                sw->close(sw);
+                return 1;
             }
 
             if (!input_stream._impl || !output_stream._impl) {
