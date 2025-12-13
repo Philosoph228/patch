@@ -75,20 +75,53 @@ static const test_case_data_t g_test_case_naughty = {
     .expected = &g_test_case_naugty__expected, 
 };
 
-static const char input_txt_source[] =
-    "int main() {\r\n"
-    "  return 0;\r\n"
-    "}\r\n"
-    "\r\n";
+/* generated. Do not edit, use ./scripts/generate_vtf_from_file.py */
+static const vtf_wrapper_t g_test_case_normal__input = {
+    .path = "./tests/data/input.txt",
+    .data =
+        "int main() {\r\n"
+        "  return 0;\r\n"
+        "}\r\n"
+        "\r\n",
+    .length = 32,
+};
 
-static const char output_txt_source[] =
-    "#include <stdio.h>\r\n"
-    "\r\n"
-    "int main() {\r\n"
-    "  printf(\"Hello, my world!\");\r\n"
-    "  return 0;\r\n"
-    "}\r\n"
-    "\r\n";
+/* generated. Do not edit, use ./scripts/generate_vtf_from_file.py */
+static const vtf_wrapper_t g_test_case_normal__diff = {
+    .path = "./tests/data/normal.diff",
+    .data =
+        "--- ./tests/data/input.txt\t2025-12-13 05:30:36 +0500\r\n"
+        "+++ ./tests/data/output.txt\t2025-12-13 05:30:36 +0500\r\n"
+        "@@ -1,4 +1,7 @@\r\n"
+        "+#include <stdio.h>\r\n"
+        "+\r\n"
+        " int main() {\r\n"
+        "+  printf(\"Hello, my world!\");\r\n"
+        "   return 0;\r\n"
+        " }\r\n"
+        " \r\n",
+    .length = 218,
+};
+
+/* generated. Do not edit, use ./scripts/generate_vtf_from_file.py */
+static const vtf_wrapper_t g_test_case_normal__expected = {
+    .path = "./tests/data/output.txt",
+    .data =
+        "#include <stdio.h>\r\n"
+        "\r\n"
+        "int main() {\r\n"
+        "  printf(\"Hello, my world!\");\r\n"
+        "  return 0;\r\n"
+        "}\r\n"
+        "\r\n",
+    .length = 85,
+};
+
+static const test_case_data_t g_test_case_normal = {
+    .input = &g_test_case_normal__input,
+    .diff = &g_test_case_normal__diff,
+    .expected = &g_test_case_normal__expected,
+};
 
 int test_cbk(patch_evt_t* evt) {
     if (evt == NULL) /* Invalid evt */
@@ -148,32 +181,28 @@ int init_test_context(simple_test_data_t* context_data, const test_case_data_t* 
     make_memsw(&context_data->outfile_owned_stream.stream, &context_data->outfile_owned_stream.mem);
 }
 
-static const char diff_source[] =
-    "--- input.txt\r\n"
-    "+++ output.txt\r\n"
-    "@@ -1,4 +1,7 @@\r\n"
-    "+#include <stdio.h>\r\n"
-    "+\r\n"
-    " int main() {\r\n"
-    "+  printf(\"Hello, my world!\");\r\n"
-    " return 0;\r\n"
-    " }\r\n"
-    " \r\n";
-
 int main() {
-    simple_test_data_t test_data = { 0 };
 
-    init_test_context(&test_data, &g_test_case_naughty);
+    test_case_data_t* test_cases[] = {
+        &g_test_case_normal,
+        &g_test_case_naughty,
+    };
 
-    void* patcher = patch_init();
-    patch_set_options(patcher, PATCH_OPTION_VERBOSE);
-    patch_set_path_cbk(patcher, (patch_event_cbk_t*)&test_cbk, (void*)&test_data);
-    apply_patch(patcher, &test_data.diff_owned_stream.stream);
+    for (size_t i = 0; i < sizeof(test_cases) / sizeof(*test_cases); ++i) {
+        simple_test_data_t test_data = {0};
 
-    dynmem_write(&test_data.outfile_owned_stream.mem, "\0", sizeof(char), 1);
-    printf("%s", test_data.outfile_owned_stream.mem.buf);
+        init_test_context(&test_data, test_cases[i]);
 
-    patch_destroy(patcher);
+        void* patcher = patch_init();
+        patch_set_options(patcher, PATCH_OPTION_VERBOSE);
+        patch_set_path_cbk(patcher, (patch_event_cbk_t*)&test_cbk, (void*)&test_data);
+        apply_patch(patcher, &test_data.diff_owned_stream.stream);
+
+        dynmem_write(&test_data.outfile_owned_stream.mem, "\0", sizeof(char), 1);
+        printf("%s", test_data.outfile_owned_stream.mem.buf);
+
+        patch_destroy(patcher);
+    }
 
     return 0;
 }
